@@ -1,4 +1,9 @@
-"""Command-line entry point."""
+"""Command-line interface.
+
+Behaviour is organised into subcommands from the start, so that later
+capabilities attach as siblings of ``match`` rather than by changing what an
+existing invocation means.
+"""
 
 from __future__ import annotations
 
@@ -10,22 +15,34 @@ from typing import List, Optional
 from .config import load_settings
 from .corpus import CorpusError, load_evidence, load_job_description
 from .models import FocusPlan, Status
-from .pipeline import run_pipeline
-from .plan import QualityGateError
+from .workflow import QualityGateError, run_pipeline
+
+PROGRAM_NAME = "jd-evidence-matcher"
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="jd-evidence-matcher",
+        prog=PROGRAM_NAME,
+        description="Evidence-grounded matching of job-description requirements.",
+    )
+    subcommands = parser.add_subparsers(dest="command", metavar="<command>")
+
+    match = subcommands.add_parser(
+        "match",
+        help="label each requirement PROOF or GAP against an evidence corpus",
         description=(
             "Extract requirements from a job description and label each one "
             "PROOF or GAP against an evidence corpus."
         ),
     )
-    parser.add_argument("--jd", required=True, type=Path, help="job description text file")
-    parser.add_argument("--evidence", required=True, type=Path, help="evidence corpus (YAML or JSON)")
-    parser.add_argument("--out", type=Path, default=None, help="directory for stage artifacts")
-    parser.add_argument("--config", type=Path, default=None, help="settings file")
+    match.add_argument("--jd", required=True, type=Path, help="job description text file")
+    match.add_argument(
+        "--evidence", required=True, type=Path, help="evidence corpus (YAML or JSON)"
+    )
+    match.add_argument("--out", type=Path, default=None, help="directory for stage artifacts")
+    match.add_argument("--config", type=Path, default=None, help="settings file")
+    match.set_defaults(handler=run_match)
+
     return parser
 
 
@@ -56,9 +73,8 @@ def render(plan: FocusPlan) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def main(argv: Optional[List[str]] = None) -> int:
-    args = build_parser().parse_args(argv)
-
+def run_match(args: argparse.Namespace) -> int:
+    """Handle the ``match`` subcommand."""
     try:
         job_description = load_job_description(args.jd)
         evidence = load_evidence(args.evidence)
@@ -72,6 +88,17 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.out is not None:
         print("Stage artifacts written to {}".format(args.out), file=sys.stderr)
     return 0
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+
+    if not getattr(args, "command", None):
+        parser.print_help(sys.stderr)
+        return 2
+
+    return args.handler(args)
 
 
 if __name__ == "__main__":
