@@ -2,32 +2,91 @@
 
 [![CI](https://github.com/JackyJiang08/interview-prep-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/JackyJiang08/interview-prep-agent/actions/workflows/ci.yml)
 
-Match the stated requirements of a job description against a corpus of attested
-experience, and label each requirement as proven or unproven with a citation.
+A staged system for turning a job posting into a defensible interview
+preparation plan — one where every claim traces back to something the candidate
+can actually attest to, and each layer is only as autonomous as its decisions
+require.
 
-**Early prototype — active development**
+**Early prototype — active development.** Layer 1, the deterministic workflow,
+is what runs today. The layers above it are described below and are not built.
 
 ## Problem
 
-A job posting states a dozen requirements. A candidate has a body of real
-experience. Deciding which requirements the experience actually covers is
-tedious to do by hand and unreliable to do with a single model prompt.
+Preparing for a specific interview is a research task with a deadline. A posting
+states a dozen requirements, the candidate has a body of real experience, and
+somewhere in the gap between the two sits the small set of things actually worth
+rehearsing. Finding that set takes more than one comparison: it means looking up
+what the company ships, noticing which claims are thin, and revising after the
+first conversation reveals what a panel really probes.
 
-The unreliability has a specific shape. Asked to do the whole job in one step, a
-language model returns fluent output containing claims that appear in neither the
-posting nor the experience — an invented metric, a skill never demonstrated — and
-gives no way to tell which part of the reasoning failed. The output is unusable
-not because it reads badly but because nothing in it can be checked.
+Handing all of that to a single model prompt fails in a specific way. The output
+is fluent and contains claims that appear in neither the posting nor the
+candidate's experience — an invented metric, a skill never demonstrated — and
+gives no way to tell which part of the reasoning failed. It is unusable not
+because it reads badly but because nothing in it can be checked.
 
-This project treats that as a systems problem rather than a prompting one. If
-every stage boundary is validated and every claim carries a pointer to its
-source, a wrong answer becomes a wrong link that a reader can find and reject.
+This project treats that as a systems problem rather than a prompting one, along
+two axes. Every claim carries a pointer to its source, so a wrong answer becomes
+a wrong link that a reader can find and reject. And capability is added a layer
+at a time, each layer no more autonomous than its own decisions require.
+
+## Architecture
+
+Four layers. Each is built only once its decisions justify the machinery it
+needs, and each inherits the traceability guarantee of the ones below it. Full
+reasoning and the interface between each pair:
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+### Layer 1 — deterministic workflow · shipped
+
+Requirement extraction, evidence matching, and gap-first plan assembly, guarded
+by coverage and traceability gates. Fixed control flow, because these three
+steps have no runtime branch to take.
+
+Still open inside this layer: semantic matching, to close the lexical false-gap
+problem noted under Known limitations; splitting bundled requirement lines into
+atomic requirements; and calibrating `match_threshold` against labelled data
+rather than by inspection.
+
+### Layer 2 — bounded decision layer · next
+
+Once the system can call tools and act on missing information, "what to do next"
+becomes a real decision rather than a fixed sequence. This layer chooses among a
+small, closed set of actions — request evidence, research, revise, stop — under
+a step limit, recording which action it took and why.
+
+Ships once there is at least one real tool with a defined failure mode,
+execution traces good enough to debug a wrong trajectory, and an evaluation set
+showing the loop does not degrade what Layer 1 already gets right.
+
+### Layer 3 — durable state · planned
+
+State that survives across turns, so research results and post-interview
+feedback update an existing plan instead of regenerating it. Regeneration is the
+wrong default: it discards work the candidate has already reviewed and makes
+successive versions incomparable.
+
+Ships once the state has a versioned schema, updates are idempotent, and there
+is a defined rule for what a newly learned fact may overwrite.
+
+### Cross-cutting — traces, evaluation, failure analysis · planned
+
+Execution traces spanning every layer, a labelled evaluation set of real
+postings scoring false gaps and false proofs separately, and written failure
+analysis. The evaluation set gates most of the work above: without it there is
+no way to tell an improvement from a change.
 
 ## Approach
 
-* **Fixed control flow.** Three stages run in the same order on every
-  invocation. Nothing decides at runtime what to do next, because none of the
-  three steps has a real branch to make.
+* **Autonomy proportional to the decision.** A loop is not justified where there
+  is no decision to make. Layer 1's three stages have none — extraction always
+  precedes matching, matching always precedes assembly, and no result can change
+  what runs next — so its control flow is fixed in code. That is a claim about
+  these three steps, not an argument against agency. Real decisions appear the
+  moment the system meets the world: which missing evidence to ask the candidate
+  for, what to do when a research tool returns thin results or fails outright,
+  and how to revise a plan after interview feedback contradicts it. Those three
+  points are Layer 2, and that is where a loop earns its cost.
 * **Verbatim grounding.** Requirements keep the posting's exact wording. A
   separate normalized form exists for comparison and is never displayed.
 * **Transparent scoring.** Requirements are matched to evidence by
@@ -58,11 +117,11 @@ interview-prep-agent/
 ├── examples/           synthetic posting and evidence corpus
 │   └── trace/          per-stage artifacts from one committed run
 ├── configs/            tunables, no hardcoded paths
-├── data/               local inputs, not committed
-├── docs/
-│   ├── METHODOLOGY.md  scoring formula, gates, and limitations
-│   └── DECISIONS.md    choices made and the reasoning behind them
-└── notebooks/          exploratory work
+├── data/               where your own inputs go, not committed
+└── docs/
+    ├── ARCHITECTURE.md the four layers, their interfaces, and ship criteria
+    ├── METHODOLOGY.md  scoring formula, gates, and limitations
+    └── DECISIONS.md    choices made and the reasoning behind them
 ```
 
 ## Quickstart
@@ -151,23 +210,9 @@ Known limitations, in order of how much they cost:
 * **Accuracy is unmeasured.** The gates check structural integrity between
   stages. They cannot tell whether a verdict is correct.
 
-## Roadmap
-
-1. **Labelled evaluation set** — real postings with hand-labelled verdicts,
-   scoring false-gap and false-proof rates separately, since a false gap wastes
-   preparation time while a false proof leaves a real weakness unaddressed.
-   Everything below is unmeasurable without this.
-2. **Semantic matching** — embedding or model-backed scoring behind the existing
-   matcher seam, to close the lexical false-gap problem. Provider-agnostic.
-3. **Requirement splitting** — decompose bundled lines into atomic requirements.
-4. **Threshold calibration** — set `match_threshold` from the evaluation set
-   rather than by inspection.
-5. **Bounded interactive step** — request missing evidence where the corpus is
-   thin. Stages 1–3 stay fixed in code; a loop buys nothing where there is no
-   decision to make.
-
 ## References
 
+Layer breakdown and interfaces: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 Method, scoring formula and citations: [`docs/METHODOLOGY.md`](docs/METHODOLOGY.md).
 Choices made and why: [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
