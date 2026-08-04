@@ -1,15 +1,16 @@
-"""Evidence-grounded requirement matching for job descriptions.
+"""Evidence-grounded requirement matching.
 
-The pipeline turns a posting plus an evidence corpus into a gap-first focus
-plan in which every supported requirement cites the evidence that supports it.
+The ``workflow`` subpackage holds the deterministic three-stage pipeline that
+turns a posting plus an evidence corpus into a gap-first plan in which every
+supported requirement cites the evidence supporting it. Shared contracts,
+settings, corpus loading and the command-line interface sit at package root so
+that later layers can reuse them without depending on the workflow itself.
 """
 
 from __future__ import annotations
 
 from .config import Settings, load_settings
 from .corpus import load_evidence, load_job_description
-from .extract import extract_requirements
-from .match import match_requirements
 from .models import (
     Coverage,
     EvidenceItem,
@@ -20,10 +21,15 @@ from .models import (
     RequirementMatch,
     Status,
 )
-from .pipeline import run_pipeline
-from .plan import QualityGateError, build_focus_plan
+from .workflow import (
+    QualityGateError,
+    build_focus_plan,
+    extract_requirements,
+    match_requirements,
+    run_pipeline,
+)
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "Coverage",

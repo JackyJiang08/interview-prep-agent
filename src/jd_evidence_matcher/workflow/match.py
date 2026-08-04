@@ -12,7 +12,7 @@ import math
 import re
 from typing import Dict, List, Sequence, Set
 
-from .models import EvidenceItem, EvidenceMatch, Requirement, RequirementMatch, Status
+from ..models import EvidenceItem, EvidenceMatch, Requirement, RequirementMatch, Status
 
 METHOD_NAME = "lexical-idf-v1"
 

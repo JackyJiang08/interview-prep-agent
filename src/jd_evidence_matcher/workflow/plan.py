@@ -12,8 +12,7 @@ from __future__ import annotations
 
 from typing import List, Sequence
 
-from .match import METHOD_NAME
-from .models import (
+from ..models import (
     Coverage,
     EvidenceItem,
     FocusPlan,
@@ -22,6 +21,7 @@ from .models import (
     RequirementMatch,
     Status,
 )
+from .match import METHOD_NAME
 
 
 class QualityGateError(ValueError):

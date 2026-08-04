@@ -16,7 +16,7 @@ from __future__ import annotations
 import re
 from typing import List
 
-from .models import Requirement
+from ..models import Requirement
 
 # Leading list markers: bullets, dashes, and "1." / "(2)" style numbering.
 _LIST_MARKER = re.compile(r"^\s*(?:[-*•·●▪–—]+|\(?\d{1,2}[.)])\s+")

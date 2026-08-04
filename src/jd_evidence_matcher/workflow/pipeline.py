@@ -11,10 +11,10 @@ import json
 from pathlib import Path
 from typing import List, Optional, Sequence
 
-from .config import Settings, load_settings
+from ..config import Settings, load_settings
+from ..models import EvidenceItem, FocusPlan, Requirement, RequirementMatch
 from .extract import extract_requirements
 from .match import match_requirements
-from .models import EvidenceItem, FocusPlan, Requirement, RequirementMatch
 from .plan import build_focus_plan
 
 REQUIREMENTS_ARTIFACT = "requirements.json"

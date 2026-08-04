@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from jd_evidence_matcher import Status, extract_requirements, match_requirements
-from jd_evidence_matcher.match import tokenize
+from jd_evidence_matcher.workflow.match import tokenize
 
 
 def test_tokenize_keeps_compound_terms_whole_and_split():
