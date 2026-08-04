@@ -1,0 +1,76 @@
+[
+  {
+    "requirement_id": "REQ-001",
+    "status": "PROOF",
+    "matches": [
+      {
+        "evidence_id": "EV-001",
+        "score": 1.0,
+        "overlapping_terms": [
+          "analysis",
+          "datasets",
+          "large",
+          "python",
+          "sql"
+        ]
+      }
+    ],
+    "method": "lexical-idf-v1"
+  },
+  {
+    "requirement_id": "REQ-002",
+    "status": "GAP",
+    "matches": [],
+    "method": "lexical-idf-v1"
+  },
+  {
+    "requirement_id": "REQ-003",
+    "status": "PROOF",
+    "matches": [
+      {
+        "evidence_id": "EV-002",
+        "score": 0.7587,
+        "overlapping_terms": [
+          "cloud",
+          "data",
+          "etl",
+          "pipelines",
+          "warehouse"
+        ]
+      }
+    ],
+    "method": "lexical-idf-v1"
+  },
+  {
+    "requirement_id": "REQ-004",
+    "status": "PROOF",
+    "matches": [
+      {
+        "evidence_id": "EV-003",
+        "score": 1.0,
+        "overlapping_terms": [
+          "communicate",
+          "cross",
+          "engineering",
+          "findings",
+          "functional",
+          "partners",
+          "product"
+        ]
+      }
+    ],
+    "method": "lexical-idf-v1"
+  },
+  {
+    "requirement_id": "REQ-005",
+    "status": "GAP",
+    "matches": [],
+    "method": "lexical-idf-v1"
+  },
+  {
+    "requirement_id": "REQ-006",
+    "status": "GAP",
+    "matches": [],
+    "method": "lexical-idf-v1"
+  }
+]

@@ -1,5 +1,7 @@
 # interview-prep-agent
 
+[![CI](https://github.com/JackyJiang08/interview-prep-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/JackyJiang08/interview-prep-agent/actions/workflows/ci.yml)
+
 Match the stated requirements of a job description against a corpus of attested
 experience, and label each requirement as proven or unproven with a citation.
 
@@ -54,9 +56,12 @@ interview-prep-agent/
 │   └── cli.py          command-line entry point
 ├── tests/              per-stage smoke tests plus end-to-end
 ├── examples/           synthetic posting and evidence corpus
+│   └── trace/          per-stage artifacts from one committed run
 ├── configs/            tunables, no hardcoded paths
 ├── data/               local inputs, not committed
-├── docs/METHODOLOGY.md scoring formula, gates, and limitations
+├── docs/
+│   ├── METHODOLOGY.md  scoring formula, gates, and limitations
+│   └── DECISIONS.md    choices made and the reasoning behind them
 └── notebooks/          exploratory work
 ```
 
@@ -89,6 +94,12 @@ Method: lexical-idf-v1
         - EV-002 score=0.76 terms=cloud, data, etl, pipelines, warehouse
 ```
 
+With `--out`, each stage writes its own JSON artifact. A run over the committed
+example is checked in under [`examples/trace/`](examples/trace/), so the stage
+boundaries can be read without installing anything: a verdict in
+`focus_plan.json` traces back to a score in `matches.json`, to the terms that
+produced it, to a source line in `requirements.json`.
+
 Installing the package provides a console command instead:
 
 ```bash
@@ -97,10 +108,12 @@ interview-prep-agent match --jd examples/sample_job_description.txt \
                            --evidence examples/sample_evidence.yaml --out out/
 ```
 
-Tests:
+Tests and lint, the same checks CI runs:
 
 ```bash
-pip install -r requirements-dev.txt && pytest
+pip install -r requirements-dev.txt
+pytest
+ruff check . && ruff format --check .
 ```
 
 ### Your own inputs
@@ -156,6 +169,7 @@ Known limitations, in order of how much they cost:
 ## References
 
 Method, scoring formula and citations: [`docs/METHODOLOGY.md`](docs/METHODOLOGY.md).
+Choices made and why: [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
 * Spärck Jones, K. (1972). *A statistical interpretation of term specificity and
   its application in retrieval.* Journal of Documentation, 28(1), 11–21.

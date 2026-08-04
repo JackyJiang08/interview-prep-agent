@@ -1,0 +1,114 @@
+{
+  "coverage": {
+    "total": 6,
+    "proof": 3,
+    "gap": 3
+  },
+  "items": [
+    {
+      "requirement": {
+        "id": "REQ-002",
+        "text": "Experience designing and interpreting A/B tests",
+        "normalized": "experience designing and interpreting a/b tests",
+        "source_line": 8
+      },
+      "status": "GAP",
+      "matches": [],
+      "note": "No evidence item covers this requirement. Prepare it first."
+    },
+    {
+      "requirement": {
+        "id": "REQ-005",
+        "text": "Familiarity with Kubernetes and service mesh operations",
+        "normalized": "familiarity with kubernetes and service mesh operations",
+        "source_line": 11
+      },
+      "status": "GAP",
+      "matches": [],
+      "note": "No evidence item covers this requirement. Prepare it first."
+    },
+    {
+      "requirement": {
+        "id": "REQ-006",
+        "text": "Experience with causal inference methods such as difference-in-differences",
+        "normalized": "experience with causal inference methods such as difference-in-differences",
+        "source_line": 14
+      },
+      "status": "GAP",
+      "matches": [],
+      "note": "No evidence item covers this requirement. Prepare it first."
+    },
+    {
+      "requirement": {
+        "id": "REQ-001",
+        "text": "Strong SQL and Python for analysis on large datasets",
+        "normalized": "strong sql and python for analysis on large datasets",
+        "source_line": 7
+      },
+      "status": "PROOF",
+      "matches": [
+        {
+          "evidence_id": "EV-001",
+          "score": 1.0,
+          "overlapping_terms": [
+            "analysis",
+            "datasets",
+            "large",
+            "python",
+            "sql"
+          ]
+        }
+      ],
+      "note": "Supported by EV-001."
+    },
+    {
+      "requirement": {
+        "id": "REQ-003",
+        "text": "Build and maintain ETL pipelines in a cloud data warehouse",
+        "normalized": "build and maintain etl pipelines in a cloud data warehouse",
+        "source_line": 9
+      },
+      "status": "PROOF",
+      "matches": [
+        {
+          "evidence_id": "EV-002",
+          "score": 0.7587,
+          "overlapping_terms": [
+            "cloud",
+            "data",
+            "etl",
+            "pipelines",
+            "warehouse"
+          ]
+        }
+      ],
+      "note": "Supported by EV-002."
+    },
+    {
+      "requirement": {
+        "id": "REQ-004",
+        "text": "Communicate findings to cross-functional product and engineering partners",
+        "normalized": "communicate findings to cross-functional product and engineering partners",
+        "source_line": 10
+      },
+      "status": "PROOF",
+      "matches": [
+        {
+          "evidence_id": "EV-003",
+          "score": 1.0,
+          "overlapping_terms": [
+            "communicate",
+            "cross",
+            "engineering",
+            "findings",
+            "functional",
+            "partners",
+            "product"
+          ]
+        }
+      ],
+      "note": "Supported by EV-003."
+    }
+  ],
+  "method": "lexical-idf-v1"
+}

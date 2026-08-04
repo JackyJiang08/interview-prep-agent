@@ -1,0 +1,38 @@
+[
+  {
+    "id": "REQ-001",
+    "text": "Strong SQL and Python for analysis on large datasets",
+    "normalized": "strong sql and python for analysis on large datasets",
+    "source_line": 7
+  },
+  {
+    "id": "REQ-002",
+    "text": "Experience designing and interpreting A/B tests",
+    "normalized": "experience designing and interpreting a/b tests",
+    "source_line": 8
+  },
+  {
+    "id": "REQ-003",
+    "text": "Build and maintain ETL pipelines in a cloud data warehouse",
+    "normalized": "build and maintain etl pipelines in a cloud data warehouse",
+    "source_line": 9
+  },
+  {
+    "id": "REQ-004",
+    "text": "Communicate findings to cross-functional product and engineering partners",
+    "normalized": "communicate findings to cross-functional product and engineering partners",
+    "source_line": 10
+  },
+  {
+    "id": "REQ-005",
+    "text": "Familiarity with Kubernetes and service mesh operations",
+    "normalized": "familiarity with kubernetes and service mesh operations",
+    "source_line": 11
+  },
+  {
+    "id": "REQ-006",
+    "text": "Experience with causal inference methods such as difference-in-differences",
+    "normalized": "experience with causal inference methods such as difference-in-differences",
+    "source_line": 14
+  }
+]
