@@ -1,0 +1,14 @@
+# Default pipeline settings.
+#
+# Override with `--config path/to/file.yaml` or by setting JDEM_CONFIG.
+# Values here are the tuned defaults for the lexical baseline matcher.
+
+# Minimum share of a requirement's weighted terms that evidence must attest
+# before the requirement counts as PROOF. Raise it for stricter matching.
+match_threshold: 0.30
+
+# Cap on how many evidence items a single requirement may cite.
+max_matches_per_requirement: 3
+
+# Write per-stage JSON artifacts when an output directory is supplied.
+write_stage_artifacts: true

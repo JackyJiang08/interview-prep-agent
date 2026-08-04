@@ -1,0 +1,40 @@
+# Synthetic evidence corpus used by the quickstart and the smoke tests.
+# Invented for demonstration; it describes no real person.
+#
+# Each entry needs `id` and `summary`. `skills` and `impact` are optional and
+# are scored alongside the summary.
+
+- id: EV-001
+  summary: >-
+    Owned funnel analysis for a subscription product, writing SQL against a
+    warehouse of roughly 40 million events and modelling results in Python.
+  skills:
+    - sql
+    - python
+    - pandas
+    - funnel analysis
+    - large datasets
+  impact: Reduced a weekly reporting cycle from two days to under an hour.
+
+- id: EV-002
+  summary: >-
+    Built and maintained scheduled ETL pipelines loading raw application logs
+    into a cloud data warehouse, with row-count and freshness checks.
+  skills:
+    - etl
+    - pipelines
+    - cloud data warehouse
+    - airflow
+    - data quality
+  impact: Cut pipeline failures from several per week to roughly one per month.
+
+- id: EV-003
+  summary: >-
+    Presented analysis to cross-functional product and engineering partners and
+    maintained the dashboards those teams reviewed each week.
+  skills:
+    - communicate findings
+    - cross-functional partners
+    - dashboards
+    - stakeholder review
+  impact: Analysis fed directly into two roadmap decisions.

@@ -1,0 +1,14 @@
+Senior Data Analyst, Growth
+
+About the role
+We are looking for an analyst to own measurement for our activation funnel.
+
+Requirements
+- Strong SQL and Python for analysis on large datasets
+- Experience designing and interpreting A/B tests
+- Build and maintain ETL pipelines in a cloud data warehouse
+- Communicate findings to cross-functional product and engineering partners
+- Familiarity with Kubernetes and service mesh operations
+
+Nice to have
+- Experience with causal inference methods such as difference-in-differences

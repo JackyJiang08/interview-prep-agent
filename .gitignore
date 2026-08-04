@@ -1,0 +1,45 @@
+# Working copies of upstream reference material. Never committed.
+_source/
+
+# Local secrets
+.env
+.env.local
+
+# Data. Inputs and outputs stay local; only .gitkeep and README are tracked.
+data/*
+!data/raw/
+data/raw/*
+!data/**/.gitkeep
+!data/README.md
+out/
+*.csv
+*.parquet
+*.jsonl
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.python-version
+
+# Tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Notebook checkpoints and stripped state
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+
+# Editor and OS
+.vscode/
+.idea/
+.DS_Store

@@ -1,0 +1,5 @@
+# Runtime dependencies, pinned. Derived from the imports in src/.
+#   pydantic  -> src/jd_evidence_matcher/models.py, config.py, corpus.py
+#   PyYAML    -> src/jd_evidence_matcher/config.py, corpus.py
+pydantic==2.11.7
+PyYAML==6.0.2
