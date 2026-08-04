@@ -1,4 +1,4 @@
-# jd-evidence-matcher
+# interview-prep-agent
 
 Match the stated requirements of a job description against a corpus of attested
 experience, and label each requirement as proven or unproven with a citation.
@@ -41,13 +41,14 @@ source, a wrong answer becomes a wrong link that a reader can find and reject.
 ## Repo structure
 
 ```
-jd-evidence-matcher/
-├── src/jd_evidence_matcher/
+interview-prep-agent/
+├── src/interview_prep_agent/
+│   ├── workflow/       the deterministic layer
+│   │   ├── extract.py    stage 1 — posting text to atomic requirements
+│   │   ├── match.py      stage 2 — IDF-weighted lexical scoring
+│   │   ├── plan.py       stage 3 — gap-first assembly and quality gates
+│   │   └── pipeline.py   orchestration and per-stage artifacts
 │   ├── models.py       validated contracts shared across stage boundaries
-│   ├── extract.py      stage 1 — posting text to atomic requirements
-│   ├── match.py        stage 2 — IDF-weighted lexical scoring
-│   ├── plan.py         stage 3 — gap-first assembly and quality gates
-│   ├── pipeline.py     orchestration and per-stage artifacts
 │   ├── corpus.py       reading postings and evidence from disk
 │   ├── config.py       settings resolution
 │   └── cli.py          command-line entry point
@@ -62,12 +63,12 @@ jd-evidence-matcher/
 ## Quickstart
 
 ```bash
-git clone https://github.com/JackyJiang08/jd-evidence-matcher.git
-cd jd-evidence-matcher
+git clone https://github.com/JackyJiang08/interview-prep-agent.git
+cd interview-prep-agent
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-PYTHONPATH=src python -m jd_evidence_matcher.cli \
+PYTHONPATH=src python -m interview_prep_agent.cli match \
   --jd examples/sample_job_description.txt \
   --evidence examples/sample_evidence.yaml \
   --out out/
@@ -92,8 +93,8 @@ Installing the package provides a console command instead:
 
 ```bash
 pip install -e .
-jd-evidence-matcher --jd examples/sample_job_description.txt \
-                    --evidence examples/sample_evidence.yaml --out out/
+interview-prep-agent match --jd examples/sample_job_description.txt \
+                           --evidence examples/sample_evidence.yaml --out out/
 ```
 
 Tests:
@@ -123,7 +124,7 @@ Works today, covered by 20 tests:
 * IDF-weighted lexical matching with per-match term attribution
 * Gap-first plan assembly with coverage and traceability gates
 * Per-stage JSON artifacts and a command-line interface
-* Settings resolved from `--config`, then `JDEM_CONFIG`, then the packaged default
+* Settings resolved from `--config`, then `IPA_CONFIG`, then the packaged default
 
 Known limitations, in order of how much they cost:
 

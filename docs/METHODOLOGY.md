@@ -127,4 +127,4 @@ weakness unprepared. Building that set is a roadmap item.
    https://www.anthropic.com/engineering/building-effective-agents — the
    workflow-versus-agent distinction that motivates fixing control flow in code.
 4. Pydantic documentation. https://docs.pydantic.dev/ — the validation layer
-   enforcing the stage contracts in `src/jd_evidence_matcher/models.py`.
+   enforcing the stage contracts in `src/interview_prep_agent/models.py`.

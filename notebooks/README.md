@@ -7,7 +7,7 @@ Conventions:
 
 * Clear all outputs before committing (`Kernel > Restart & Clear Output`).
   Outputs embed data that does not belong in version control.
-* Import from `jd_evidence_matcher` rather than pasting logic inline. Anything
+* Import from `interview_prep_agent` rather than pasting logic inline. Anything
   worth keeping belongs in `src/` with a test.
 * Read inputs from `data/raw/` or `examples/`, never from an absolute path.
 
