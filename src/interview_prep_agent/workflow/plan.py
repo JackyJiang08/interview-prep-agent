@@ -10,7 +10,7 @@ three failure modes the design cares about loud rather than silent:
 
 from __future__ import annotations
 
-from typing import List, Sequence
+from collections.abc import Sequence
 
 from ..models import (
     Coverage,
@@ -53,15 +53,12 @@ def _check_gates(
         for match in verdict.matches:
             if match.evidence_id not in known_evidence:
                 raise QualityGateError(
-                    "traceability: {} cites unknown evidence {}".format(
-                        verdict.requirement_id, match.evidence_id
-                    )
+                    f"traceability: {verdict.requirement_id} cites "
+                    f"unknown evidence {match.evidence_id}"
                 )
         if verdict.status is Status.PROOF and not verdict.matches:
             raise QualityGateError(
-                "traceability: {} is PROOF with no supporting evidence".format(
-                    verdict.requirement_id
-                )
+                f"traceability: {verdict.requirement_id} is PROOF with no supporting evidence"
             )
 
 
@@ -69,7 +66,7 @@ def _note(status: Status, verdict: RequirementMatch) -> str:
     if status is Status.GAP:
         return "No evidence item covers this requirement. Prepare it first."
     cited = ", ".join(match.evidence_id for match in verdict.matches)
-    return "Supported by {}.".format(cited)
+    return f"Supported by {cited}."
 
 
 def build_focus_plan(
@@ -88,7 +85,7 @@ def build_focus_plan(
     _check_gates(requirements, verdicts, evidence)
 
     by_id = {verdict.requirement_id: verdict for verdict in verdicts}
-    items: List[PlanItem] = []
+    items: list[PlanItem] = []
     for requirement in requirements:
         verdict = by_id[requirement.id]
         items.append(

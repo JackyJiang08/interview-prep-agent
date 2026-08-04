@@ -8,8 +8,9 @@ stage that produced the bad input.
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from pathlib import Path
-from typing import List, Optional, Sequence
+from typing import Optional
 
 from ..config import Settings, load_settings
 from ..models import EvidenceItem, FocusPlan, Requirement, RequirementMatch
@@ -59,8 +60,8 @@ def run_pipeline(
 
 def _write_artifacts(
     output_dir: Path,
-    requirements: List[Requirement],
-    verdicts: List[RequirementMatch],
+    requirements: list[Requirement],
+    verdicts: list[RequirementMatch],
     plan: FocusPlan,
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)

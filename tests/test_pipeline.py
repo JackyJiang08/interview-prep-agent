@@ -78,8 +78,12 @@ def test_gate_rejects_citation_of_unknown_evidence(sample_evidence):
 
 def test_gate_rejects_dropped_requirement(sample_evidence):
     requirements = [
-        Requirement(id="REQ-001", text="Own the funnel", normalized="own the funnel", source_line=1),
-        Requirement(id="REQ-002", text="Own the metrics", normalized="own the metrics", source_line=2),
+        Requirement(
+            id="REQ-001", text="Own the funnel", normalized="own the funnel", source_line=1
+        ),
+        Requirement(
+            id="REQ-002", text="Own the metrics", normalized="own the metrics", source_line=2
+        ),
     ]
     verdicts = [
         RequirementMatch(requirement_id="REQ-001", status=Status.GAP, matches=[], method="test")

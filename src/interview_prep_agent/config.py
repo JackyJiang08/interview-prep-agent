@@ -41,7 +41,7 @@ def load_settings(path: Optional[Path] = None) -> Settings:
     if not Path(resolved).is_file():
         return Settings()
 
-    with open(resolved, "r", encoding="utf-8") as handle:
+    with open(resolved, encoding="utf-8") as handle:
         raw = yaml.safe_load(handle) or {}
 
     return Settings(**raw)

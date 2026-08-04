@@ -10,7 +10,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
 from .config import load_settings
 from .corpus import CorpusError, load_evidence, load_job_description
@@ -48,19 +48,16 @@ def build_parser() -> argparse.ArgumentParser:
 
 def render(plan: FocusPlan) -> str:
     """Render a focus plan as readable text."""
+    coverage = plan.coverage
     lines = [
-        "Coverage: {total} requirements | {proof} PROOF | {gap} GAP".format(
-            total=plan.coverage.total,
-            proof=plan.coverage.proof,
-            gap=plan.coverage.gap,
-        ),
-        "Method: {}".format(plan.method),
+        f"Coverage: {coverage.total} requirements | {coverage.proof} PROOF | {coverage.gap} GAP",
+        f"Method: {plan.method}",
         "",
     ]
     for item in plan.items:
         marker = "GAP " if item.status is Status.GAP else "PROOF"
-        lines.append("[{}] {} {}".format(marker, item.requirement.id, item.requirement.text))
-        lines.append("        {}".format(item.note))
+        lines.append(f"[{marker}] {item.requirement.id} {item.requirement.text}")
+        lines.append(f"        {item.note}")
         for match in item.matches:
             lines.append(
                 "        - {} score={:.2f} terms={}".format(
@@ -81,16 +78,16 @@ def run_match(args: argparse.Namespace) -> int:
         settings = load_settings(args.config)
         plan = run_pipeline(job_description, evidence, settings, args.out)
     except (CorpusError, QualityGateError, OSError) as error:
-        print("error: {}".format(error), file=sys.stderr)
+        print(f"error: {error}", file=sys.stderr)
         return 1
 
     sys.stdout.write(render(plan))
     if args.out is not None:
-        print("Stage artifacts written to {}".format(args.out), file=sys.stderr)
+        print(f"Stage artifacts written to {args.out}", file=sys.stderr)
     return 0
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: Optional[list[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import List, Union
+from typing import Union
 
 import yaml
 from pydantic import ValidationError
@@ -20,11 +20,11 @@ def load_job_description(path: Union[str, Path]) -> str:
     """Read a job description as plain text."""
     text = Path(path).read_text(encoding="utf-8")
     if not text.strip():
-        raise CorpusError("job description at {} is empty".format(path))
+        raise CorpusError(f"job description at {path} is empty")
     return text
 
 
-def load_evidence(path: Union[str, Path]) -> List[EvidenceItem]:
+def load_evidence(path: Union[str, Path]) -> list[EvidenceItem]:
     """Read an evidence corpus from a YAML or JSON list.
 
     Each entry needs ``id`` and ``summary``; ``skills`` and ``impact`` are
@@ -42,12 +42,12 @@ def load_evidence(path: Union[str, Path]) -> List[EvidenceItem]:
         payload = payload["evidence"]
 
     if not isinstance(payload, list):
-        raise CorpusError("evidence at {} must be a list of items".format(path))
+        raise CorpusError(f"evidence at {path} must be a list of items")
 
     try:
         items = [EvidenceItem(**entry) for entry in payload]
     except (TypeError, ValidationError) as error:
-        raise CorpusError("invalid evidence in {}: {}".format(path, error))
+        raise CorpusError(f"invalid evidence in {path}: {error}") from error
 
     identifiers = [item.id for item in items]
     if len(set(identifiers)) != len(identifiers):

@@ -14,7 +14,6 @@ all, the stage falls back to reading every non-heading line. See
 from __future__ import annotations
 
 import re
-from typing import List
 
 from ..models import Requirement
 
@@ -52,7 +51,7 @@ def normalize(text: str) -> str:
     return _TRAILING_PUNCT.sub("", folded)
 
 
-def extract_requirements(raw_text: str) -> List[Requirement]:
+def extract_requirements(raw_text: str) -> list[Requirement]:
     """Extract atomic requirements from job-description text.
 
     Args:
@@ -65,7 +64,7 @@ def extract_requirements(raw_text: str) -> List[Requirement]:
     lines = raw_text.splitlines()
     listed = any(_LIST_MARKER.match(line) for line in lines)
 
-    found: List[Requirement] = []
+    found: list[Requirement] = []
     seen = set()
 
     for line_number, line in enumerate(lines, start=1):
@@ -89,7 +88,7 @@ def extract_requirements(raw_text: str) -> List[Requirement]:
 
         found.append(
             Requirement(
-                id="REQ-{:03d}".format(len(found) + 1),
+                id=f"REQ-{len(found) + 1:03d}",
                 text=text,
                 normalized=key,
                 source_line=line_number,

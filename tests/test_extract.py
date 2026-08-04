@@ -15,9 +15,7 @@ def test_strips_list_markers_but_keeps_wording():
 def test_drops_section_headings():
     text = "Requirements\nQualifications:\nBuild ETL pipelines in a warehouse\n"
     requirements = extract_requirements(text)
-    assert [item.text for item in requirements] == [
-        "Build ETL pipelines in a warehouse"
-    ]
+    assert [item.text for item in requirements] == ["Build ETL pipelines in a warehouse"]
 
 
 def test_deduplicates_on_normalized_form():
@@ -34,9 +32,7 @@ def test_prose_is_ignored_when_the_posting_uses_a_list():
         "- Build ETL pipelines in a warehouse\n"
     )
     requirements = extract_requirements(text)
-    assert [item.text for item in requirements] == [
-        "Build ETL pipelines in a warehouse"
-    ]
+    assert [item.text for item in requirements] == ["Build ETL pipelines in a warehouse"]
 
 
 def test_falls_back_to_every_line_when_no_list_exists():
@@ -48,7 +44,7 @@ def test_falls_back_to_every_line_when_no_list_exists():
 def test_identifiers_are_sequential(sample_job_description):
     requirements = extract_requirements(sample_job_description)
     assert [item.id for item in requirements] == [
-        "REQ-{:03d}".format(index) for index in range(1, len(requirements) + 1)
+        f"REQ-{index:03d}" for index in range(1, len(requirements) + 1)
     ]
 
 

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import math
 import re
-from typing import Dict, List, Sequence, Set
+from collections.abc import Sequence
 
 from ..models import EvidenceItem, EvidenceMatch, Requirement, RequirementMatch, Status
 
@@ -22,13 +22,68 @@ _SPLIT_INNER = re.compile(r"[./]")
 # High-frequency terms that carry no discriminating signal in a posting.
 STOPWORDS = frozenset(
     {
-        "a", "able", "ability", "an", "and", "any", "are", "as", "at", "be",
-        "both", "build", "by", "can", "deep", "do", "etc", "experience", "for",
-        "from", "good", "great", "has", "have", "help", "in", "into", "is", "it",
-        "its", "must", "of", "on", "or", "our", "plus", "proven", "related",
-        "solid", "strong", "such", "that", "the", "their", "them", "this", "to",
-        "up", "us", "use", "used", "using", "we", "will", "with", "within",
-        "work", "working", "year", "years", "you", "your",
+        "a",
+        "able",
+        "ability",
+        "an",
+        "and",
+        "any",
+        "are",
+        "as",
+        "at",
+        "be",
+        "both",
+        "build",
+        "by",
+        "can",
+        "deep",
+        "do",
+        "etc",
+        "experience",
+        "for",
+        "from",
+        "good",
+        "great",
+        "has",
+        "have",
+        "help",
+        "in",
+        "into",
+        "is",
+        "it",
+        "its",
+        "must",
+        "of",
+        "on",
+        "or",
+        "our",
+        "plus",
+        "proven",
+        "related",
+        "solid",
+        "strong",
+        "such",
+        "that",
+        "the",
+        "their",
+        "them",
+        "this",
+        "to",
+        "up",
+        "us",
+        "use",
+        "used",
+        "using",
+        "we",
+        "will",
+        "with",
+        "within",
+        "work",
+        "working",
+        "year",
+        "years",
+        "you",
+        "your",
     }
 )
 
@@ -39,14 +94,14 @@ def _keep(token: str) -> bool:
     return len(token) >= _MIN_TOKEN_LENGTH and token not in STOPWORDS
 
 
-def tokenize(text: str) -> List[str]:
+def tokenize(text: str) -> list[str]:
     """Split text into scoring terms.
 
     Compound terms are kept whole *and* split, so "SQL/Python" contributes
     "sql/python", "sql" and "python" while "A/B" survives as a single term that
     its one-character parts could not represent.
     """
-    tokens: List[str] = []
+    tokens: list[str] = []
     for raw in _TOKEN.findall(text.lower()):
         raw = raw.strip("./")
         if not raw:
@@ -58,7 +113,7 @@ def tokenize(text: str) -> List[str]:
     return tokens
 
 
-def _evidence_terms(item: EvidenceItem) -> Set[str]:
+def _evidence_terms(item: EvidenceItem) -> set[str]:
     parts = [item.summary, " ".join(item.skills)]
     if item.impact:
         parts.append(item.impact)
@@ -66,17 +121,16 @@ def _evidence_terms(item: EvidenceItem) -> Set[str]:
 
 
 def _inverse_document_frequency(
-    corpus: Sequence[Set[str]],
-) -> Dict[str, float]:
+    corpus: Sequence[set[str]],
+) -> dict[str, float]:
     """Weight terms by how few evidence items contain them."""
     total = len(corpus)
-    document_frequency: Dict[str, int] = {}
+    document_frequency: dict[str, int] = {}
     for terms in corpus:
         for term in terms:
             document_frequency[term] = document_frequency.get(term, 0) + 1
     return {
-        term: math.log(1.0 + total / (1.0 + count))
-        for term, count in document_frequency.items()
+        term: math.log(1.0 + total / (1.0 + count)) for term, count in document_frequency.items()
     }
 
 
@@ -87,10 +141,10 @@ def _default_weight(total: int) -> float:
 
 def score_requirement(
     requirement: Requirement,
-    evidence_terms: Sequence[Set[str]],
-    weights: Dict[str, float],
+    evidence_terms: Sequence[set[str]],
+    weights: dict[str, float],
     default_weight: float,
-) -> List[float]:
+) -> list[float]:
     """Return the coverage score of ``requirement`` against each evidence item.
 
     A score is the share of the requirement's weighted terms that the evidence
@@ -118,7 +172,7 @@ def match_requirements(
     evidence: Sequence[EvidenceItem],
     threshold: float,
     max_matches: int,
-) -> List[RequirementMatch]:
+) -> list[RequirementMatch]:
     """Label every requirement PROOF or GAP against the evidence corpus.
 
     Args:
@@ -134,7 +188,7 @@ def match_requirements(
     weights = _inverse_document_frequency(corpus)
     default_weight = _default_weight(len(corpus))
 
-    verdicts: List[RequirementMatch] = []
+    verdicts: list[RequirementMatch] = []
     for requirement in requirements:
         scores = score_requirement(requirement, corpus, weights, default_weight)
         terms = set(tokenize(requirement.text))

@@ -8,7 +8,7 @@ the system as a whole.
 from __future__ import annotations
 
 from enum import Enum
-from typing import List, Optional
+from typing import Optional
 
 from pydantic import BaseModel, Field, NonNegativeFloat
 
@@ -32,7 +32,7 @@ class EvidenceItem(BaseModel):
 
     id: str = Field(pattern=r"^EV-\d{3,}$")
     summary: str = Field(min_length=1)
-    skills: List[str] = Field(default_factory=list)
+    skills: list[str] = Field(default_factory=list)
     impact: Optional[str] = None
 
 
@@ -41,7 +41,7 @@ class EvidenceMatch(BaseModel):
 
     evidence_id: str
     score: NonNegativeFloat
-    overlapping_terms: List[str] = Field(default_factory=list)
+    overlapping_terms: list[str] = Field(default_factory=list)
 
 
 class Status(str, Enum):
@@ -56,7 +56,7 @@ class RequirementMatch(BaseModel):
 
     requirement_id: str
     status: Status
-    matches: List[EvidenceMatch] = Field(default_factory=list)
+    matches: list[EvidenceMatch] = Field(default_factory=list)
     method: str
 
 
@@ -65,7 +65,7 @@ class PlanItem(BaseModel):
 
     requirement: Requirement
     status: Status
-    matches: List[EvidenceMatch] = Field(default_factory=list)
+    matches: list[EvidenceMatch] = Field(default_factory=list)
     note: str
 
 
@@ -81,5 +81,5 @@ class FocusPlan(BaseModel):
     """Final artifact: every requirement, gaps first, each traceable."""
 
     coverage: Coverage
-    items: List[PlanItem] = Field(default_factory=list)
+    items: list[PlanItem] = Field(default_factory=list)
     method: str
