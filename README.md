@@ -37,6 +37,13 @@ needs, and each inherits the traceability guarantee of the ones below it. Full
 reasoning and the interface between each pair:
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
+| Layer | Status | What it does |
+|---|---|---|
+| 1 — deterministic workflow | **shipped** | Extracts requirements, matches them to evidence, assembles a gap-first plan behind coverage and traceability gates. |
+| 2 — bounded decision layer | **next** | Chooses among a small closed set of actions once tools and missing information make the next step a real decision. |
+| 3 — durable state | **planned** | Carries a plan across turns so new information updates it instead of regenerating it. |
+| Cross-cutting | **planned** | Execution traces, a labelled evaluation set, and written failure analysis. |
+
 ### Layer 1 — deterministic workflow · shipped
 
 Requirement extraction, evidence matching, and gap-first plan assembly, guarded
