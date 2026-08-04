@@ -1,6 +1,6 @@
 # Default pipeline settings.
 #
-# Override with `--config path/to/file.yaml` or by setting JDEM_CONFIG.
+# Override with `--config path/to/file.yaml` or by setting IPA_CONFIG.
 # Values here are the tuned defaults for the lexical baseline matcher.
 
 # Minimum share of a requirement's weighted terms that evidence must attest

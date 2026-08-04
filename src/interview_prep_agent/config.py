@@ -1,7 +1,7 @@
 """Runtime settings.
 
 Every tunable lives in a config file, never in the code. Resolution order is
-explicit argument, then the ``JDEM_CONFIG`` environment variable, then the
+explicit argument, then the ``IPA_CONFIG`` environment variable, then the
 packaged default. No path in this module is absolute.
 """
 
@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[2] / "configs" / "default.yaml"
 
-ENV_CONFIG_PATH = "JDEM_CONFIG"
+ENV_CONFIG_PATH = "IPA_CONFIG"
 
 
 class Settings(BaseModel):
@@ -31,7 +31,7 @@ def load_settings(path: Optional[Path] = None) -> Settings:
     """Load settings from YAML.
 
     Args:
-        path: Explicit config file. Falls back to ``JDEM_CONFIG`` and then to
+        path: Explicit config file. Falls back to ``IPA_CONFIG`` and then to
             the packaged default.
 
     Returns:

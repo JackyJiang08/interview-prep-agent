@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from jd_evidence_matcher import (
+from interview_prep_agent import (
     EvidenceMatch,
     Requirement,
     RequirementMatch,
@@ -15,12 +15,12 @@ from jd_evidence_matcher import (
     extract_requirements,
     run_pipeline,
 )
-from jd_evidence_matcher.workflow.pipeline import (
+from interview_prep_agent.workflow.pipeline import (
     MATCHES_ARTIFACT,
     PLAN_ARTIFACT,
     REQUIREMENTS_ARTIFACT,
 )
-from jd_evidence_matcher.workflow.plan import QualityGateError
+from interview_prep_agent.workflow.plan import QualityGateError
 
 
 def test_end_to_end_covers_every_requirement(sample_job_description, sample_evidence):

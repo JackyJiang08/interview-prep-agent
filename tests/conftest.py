@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from jd_evidence_matcher import load_evidence, load_job_description
+from interview_prep_agent import load_evidence, load_job_description
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 EXAMPLES = REPO_ROOT / "examples"

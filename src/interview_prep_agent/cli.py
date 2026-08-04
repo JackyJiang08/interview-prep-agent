@@ -17,7 +17,7 @@ from .corpus import CorpusError, load_evidence, load_job_description
 from .models import FocusPlan, Status
 from .workflow import QualityGateError, run_pipeline
 
-PROGRAM_NAME = "jd-evidence-matcher"
+PROGRAM_NAME = "interview-prep-agent"
 
 
 def build_parser() -> argparse.ArgumentParser:

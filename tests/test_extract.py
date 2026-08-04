@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from jd_evidence_matcher import extract_requirements
+from interview_prep_agent import extract_requirements
 
 
 def test_strips_list_markers_but_keeps_wording():

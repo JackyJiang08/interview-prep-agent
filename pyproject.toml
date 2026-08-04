@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "jd-evidence-matcher"
+name = "interview-prep-agent"
 version = "0.2.0"
 description = "Match job-description requirements against an evidence corpus and label each one PROOF or GAP."
 readme = "README.md"
@@ -25,7 +25,7 @@ dependencies = [
 dev = ["pytest>=8.0,<9"]
 
 [project.scripts]
-jd-evidence-matcher = "jd_evidence_matcher.cli:main"
+interview-prep-agent = "interview_prep_agent.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
