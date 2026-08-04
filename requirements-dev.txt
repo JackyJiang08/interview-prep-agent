@@ -1,3 +1,5 @@
 # Development dependencies. Installs the runtime set as well.
+# Pinned so that a new lint release cannot turn CI red on an unchanged commit.
 -r requirements.txt
 pytest==8.4.1
+ruff==0.16.1
