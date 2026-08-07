@@ -91,6 +91,9 @@ def extract_requirements(raw_text: str) -> list[Requirement]:
                 id=f"REQ-{len(found) + 1:03d}",
                 text=text,
                 normalized=key,
+                # The requirement is a span of the posting, so it grounds
+                # itself. Both extraction paths therefore face the same gate.
+                source_quote=text,
                 source_line=line_number,
             )
         )
