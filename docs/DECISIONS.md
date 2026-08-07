@@ -6,13 +6,62 @@ stated rather than left for a reader to discover.
 
 ## Fixed control flow in the workflow layer
 
-Extraction, matching and assembly run in the same order on every invocation,
-with no runtime branch. The reason is narrow: none of the three steps produces
-a result that could change which step comes next, so a decision mechanism would
-add cost — reduced reproducibility, a larger surface to test — while buying
-nothing. This is a claim about these three steps only, not an argument against
-agency in general; genuine decisions appear as soon as the system can call tools
-or receive feedback, and that is where a bounded loop belongs.
+Extraction, matching and assembly run in the same order on every invocation.
+The reason is narrow: none of these steps produces a result that could change
+which step comes next, so a decision mechanism would add cost — reduced
+reproducibility, a larger surface to test — while buying nothing. This is a
+claim about these steps only, not an argument against agency in general;
+genuine decisions appear as soon as the system can call tools or receive
+feedback, and that is where a bounded loop belongs.
+
+The graph does contain one branch, to the error report when requirement
+validation fails. That is not a counterexample: both targets are fixed when the
+graph is built, and the predicate is a pure function of a boolean that gate code
+computed. Nothing chooses at run time; the branch only spares the caller from
+matching against requirements already known to be broken.
+
+## A graph runtime for a fixed workflow
+
+The stages moved onto a state graph without gaining any autonomy. The gain is
+that the shape is now declared in one place instead of implied by the order of
+calls in a function, and that each node's inputs and outputs are visible at the
+boundary rather than buried in a call stack. That matters ahead of a decision
+layer: adding one later means adding nodes and edges to a structure that already
+exists, rather than restructuring a straight-line function under time pressure.
+
+The cost is a dependency on a runtime for something a sequence of calls did
+adequately, and a layer of indirection between the command line and the work.
+Worth it only because of what is planned next; on its own it would be premature.
+
+## Model-backed extraction behind a provider seam
+
+Extraction has two implementations: the original lexical splitter and a
+model-backed path. Neither is a fallback for the other. The lexical path is the
+default because it is deterministic, offline, and free, which is what the
+committed example, the tests and continuous integration all need. The
+model-backed path exists because line splitting cannot read a posting written as
+prose, and cannot separate a sentence that bundles three demands into one line.
+
+The model call sits behind an abstract seam, and no stage imports a vendor SDK.
+This is the difference between a provider-agnostic design and a claim of one.
+Its response is never trusted: it is validated against the same Pydantic model
+the lexical path produces, checked for the fields only that path can supply, and
+then put through the same grounding gate. A model that returns a plausible
+requirement with a quote that is not in the posting fails exactly as loudly as a
+bug in the splitter would.
+
+## One requirement model, not two
+
+The model-backed path adds a category, an importance score, a must-have flag and
+a source quote. These extend the existing `Requirement` rather than forming a
+parallel model, because two models would mean two definitions of what a
+requirement is, drifting apart at every change, and a conversion between them
+that could silently lose the grounding field.
+
+The cost is that fields the lexical path cannot supply are optional, so the type
+alone no longer tells you a category is present. That is honest — the lexical
+path genuinely does not know the category — and it is the gate, not the type,
+that enforces completeness where completeness is required.
 
 ## Lexical scoring before semantic scoring
 
@@ -53,12 +102,28 @@ deterministic function of the repo: it changes only when behaviour changes. That
 turns an unexpected diff into a signal, and lets a reader see the stage
 boundaries without installing anything.
 
-## Supporting Python 3.9 while testing 3.11 and 3.12
+## Raising the Python floor to 3.11
 
-The package declares `requires-python = ">=3.9"` and the lint configuration
-disables the PEP 604 rewrites (`Optional[str]` to `str | None`), because Pydantic
-evaluates annotations at run time and that syntax raises `TypeError` on 3.9.
-Continuous integration covers 3.11 and 3.12 only. This is a known inconsistency:
-3.9 support is real enough to constrain the code but is not verified on every
-commit. The choice is to keep the floor until there is a reason to raise it,
-then drop the ignore list and the constraint together.
+The package previously declared `requires-python = ">=3.9"` while testing only
+3.11 and 3.12 — support real enough to constrain the code but never verified.
+That was recorded here as a known inconsistency, to be resolved when something
+forced it. The workflow runtime forced it: both it and the provider SDK require
+3.10 or newer.
+
+The floor is now 3.11 rather than 3.10, so that the declared range is exactly
+the range continuous integration actually runs. Claiming 3.10 without a job covering
+it would recreate the inconsistency this entry was written about. Two things
+went with it: the lint exemption for PEP 604 unions, which existed only for 3.9,
+and the hand-rolled `str, Enum` pairs, now `StrEnum`.
+
+## Requirement count bounds set wide
+
+The requirement gate rejects a set that is too small or too large, with defaults
+of 1 and 50. Those bounds are deliberately loose. They exist to catch degenerate
+extraction — nothing at all, or a runaway list — not to encode an opinion about
+how long a posting should be, and a tighter default would reject short but
+perfectly real postings. The extraction prompt asks for a much narrower range,
+and the bounds are configurable for callers who want to hold a model to it.
+
+The cost is that a moderately wrong count passes. Catching that needs an
+evaluation set, not a tighter constant.
