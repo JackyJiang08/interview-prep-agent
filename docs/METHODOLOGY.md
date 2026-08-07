@@ -19,30 +19,67 @@ boundaries does not make the model smarter; it makes the error attributable.
 
 ## Design
 
-Control flow is fixed in code. Every stage runs on every invocation, in the same
-order, and writes its output before the next stage starts. This is a workflow in
-the sense of Anthropic's taxonomy [3] — the path is predetermined, not chosen at
-runtime — and it is the right shape here because none of the three steps has a
-genuine branch to make.
+Control flow is fixed in code and runs on a state graph. Every invocation
+follows the same shape: extract, validate the extraction, then either match and
+plan, or report the validation errors and stop. This is a workflow in the sense
+of Anthropic's taxonomy [3] — the path is predetermined, not chosen at runtime.
+The one conditional edge does not change that: both targets are wired when the
+graph is built, and the routing predicate is a pure function of a boolean that
+deterministic gate code computed. A model, when one is used, produces data that
+is then validated; it never chooses the next node.
 
 ### Stage 1 - extraction
 
 Input is the posting as plain text; output is a list of `Requirement` records.
+There are two implementations, selected with `--extractor`; both emit the same
+model and both are held to the same grounding gate described below.
 
-Postings state their requirements as a list far more often than not, so a leading
-list marker is the signal. Lines carrying one become candidates, headings such as
-"Requirements" or "About the role" are dropped, and lines shorter than eight
-characters are discarded as noise. When a posting contains no list at all, the
-stage falls back to treating every non-heading line as a candidate.
+**Lexical path** (`lexical`, the default). Postings state their requirements as
+a list far more often than not, so a leading list marker is the signal. Lines
+carrying one become candidates, headings such as "Requirements" or "About the
+role" are dropped, and lines shorter than eight characters are discarded as
+noise. When a posting contains no list at all, the stage falls back to treating
+every non-heading line as a candidate.
 
 Each record keeps the source wording verbatim after marker removal, plus a
 lowercased, whitespace-collapsed `normalized` form used only for deduplication.
-Nothing downstream may display `normalized`; the plan quotes `text`.
+Nothing downstream may display `normalized`; the plan quotes `text`. The
+record's `source_quote` is the extracted span itself — a lexically extracted
+requirement is by construction a substring of the posting, and stating that
+explicitly is what lets one gate serve both paths.
 
 The fallback is the weak point. On a posting written as prose paragraphs it
 admits sentences that state no requirement, and it cannot split a line that
 bundles three requirements into one. Both are visible in the output rather than
 hidden, which is the most that can be claimed for them.
+
+**Model-backed path** (`llm`). A provider is asked for requirements as
+structured JSON, and its answer passes through three layers before anything
+downstream sees it:
+
+1. *The model proposes.* The prompt states constraints, not encouragement:
+   copy `source_quote` character for character, assign sequential identifiers,
+   take nothing that is not in the text. Every rule in the prompt has a
+   matching deterministic check, because a rule the code cannot verify is a
+   hope rather than a constraint.
+2. *The schema validates structure.* The response is validated against the
+   same Pydantic `Requirement` model the lexical path produces — field types,
+   identifier format, the importance scale, the category set — and additionally
+   for the fields only this path can supply. A malformed or over-full response
+   raises; nothing is salvaged from it.
+3. *The gates verify grounding.* Every `source_quote` must appear in the
+   posting (compared whitespace- and case-insensitively, nothing else
+   forgiven), identifiers must run sequentially from REQ-001, statements must
+   not repeat, and the count must fall inside configured bounds.
+
+The division of labour is the point: the model is used for what it is good at —
+reading prose — and is never the authority on whether its own output is
+grounded. A response citing text that is not in the posting fails the run
+exactly as a bug in the lexical splitter would.
+
+The model call itself sits behind a provider seam: stages depend on an abstract
+contract (prompt and JSON schema in, parsed response out), and the first
+implementation is Gemini. No stage imports a vendor SDK.
 
 ### Stage 2 - scoring
 

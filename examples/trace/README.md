@@ -6,9 +6,14 @@ stage boundaries can be read without installing anything.
 
 | File | Stage | What it shows |
 |---|---|---|
-| `requirements.json` | 1 — extraction | Each requirement with the posting's exact wording, its normalized comparison form, and the source line it came from. |
+| `requirements.json` | 1 — extraction | Each requirement with the posting's exact wording, its normalized comparison form, the `source_quote` that grounds it in the posting, and the source line it came from. |
 | `matches.json` | 2 — scoring | One verdict per requirement, with the evidence cited, the score, and the overlapping terms that produced it. |
 | `focus_plan.json` | 3 — assembly | The final gap-first plan and the coverage totals. |
+
+This run used the default lexical extractor, so each `source_quote` equals the
+extracted text and fields only the model-backed path can supply (category,
+importance, requirement type) are absent — the artifacts omit unset fields
+rather than writing null.
 
 Reading them in order is the argument for the design: a wrong verdict in
 `focus_plan.json` can be traced back to a specific score in `matches.json`, and

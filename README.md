@@ -47,13 +47,29 @@ reasoning and the interface between each pair:
 ### Layer 1 — deterministic workflow · shipped
 
 Requirement extraction, evidence matching, and gap-first plan assembly, guarded
-by coverage and traceability gates. Fixed control flow, because these three
-steps have no runtime branch to take.
+by coverage and traceability gates.
+
+Extraction has two paths. The lexical path splits list-formatted postings on
+their markers — deterministic, offline, no credentials, and the default. The
+model-backed path (`--extractor llm`, Gemini first, behind a provider seam)
+reads postings the splitter cannot: prose paragraphs, and lines bundling
+several demands. Its output goes through three validation stages: the model
+proposes requirements, the schema validates their structure, and deterministic
+gates verify grounding — every `source_quote` must appear verbatim in the
+posting, identifiers must run sequentially, statements must not repeat. The
+lexical path emits `source_quote` too, so **both paths face the same grounding
+gate**: no extractor, deterministic or not, is exempt from proving its output
+against the source. That symmetry is the traceability thesis in action.
+
+The workflow runs on a graph runtime with one conditional edge — valid
+requirements proceed to matching, invalid ones route to an error report. Still
+Layer 1: both branch targets are fixed when the graph is built, and the
+predicate is a pure function of a boolean that gate code computed. A model
+produces data that is then validated; it never chooses the next node.
 
 Still open inside this layer: semantic matching, to close the lexical false-gap
-problem noted under Known limitations; splitting bundled requirement lines into
-atomic requirements; and calibrating `match_threshold` against labelled data
-rather than by inspection.
+problem noted under Known limitations, and calibrating `match_threshold`
+against labelled data rather than by inspection.
 
 ### Layer 2 — bounded decision layer · next
 
@@ -86,9 +102,10 @@ no way to tell an improvement from a change.
 ## Approach
 
 * **Autonomy proportional to the decision.** A loop is not justified where there
-  is no decision to make. Layer 1's three stages have none — extraction always
-  precedes matching, matching always precedes assembly, and no result can change
-  what runs next — so its control flow is fixed in code. That is a claim about
+  is no decision to make. Layer 1's stages have none — extraction always
+  precedes matching, matching always precedes assembly, and the only fork
+  (invalid extraction routes to an error report) is taken by a pure predicate
+  over a gate-computed boolean — so its control flow is fixed in code. That is a claim about
   these three steps, not an argument against agency. Real decisions appear the
   moment the system meets the world: which missing evidence to ask the candidate
   for, what to do when a research tool returns thin results or fails outright,
@@ -112,10 +129,17 @@ no way to tell an improvement from a change.
 interview-prep-agent/
 ├── src/interview_prep_agent/
 │   ├── workflow/       the deterministic layer
-│   │   ├── extract.py    stage 1 — posting text to atomic requirements
-│   │   ├── match.py      stage 2 — IDF-weighted lexical scoring
-│   │   ├── plan.py       stage 3 — gap-first assembly and quality gates
-│   │   └── pipeline.py   orchestration and per-stage artifacts
+│   │   ├── graph.py         the stages as a state graph, one code-owned branch
+│   │   ├── extract.py       stage 1a — lexical splitting of listed postings
+│   │   ├── extract_model.py stage 1b — model-backed extraction, response never trusted
+│   │   ├── prompt.py        extraction constraints; every rule has a matching gate
+│   │   ├── gates.py         the deterministic checks: grounding, identity, coverage
+│   │   ├── match.py         stage 2 — IDF-weighted lexical scoring
+│   │   ├── plan.py          stage 3 — gap-first assembly behind the gates
+│   │   └── pipeline.py      façade over the graph, per-stage artifacts
+│   ├── providers/      the model seam — no stage imports a vendor SDK
+│   │   ├── base.py          abstract contract: prompt + schema in, parsed JSON out
+│   │   └── gemini.py        first implementation
 │   ├── models.py       validated contracts shared across stage boundaries
 │   ├── corpus.py       reading postings and evidence from disk
 │   ├── config.py       settings resolution
@@ -174,6 +198,30 @@ interview-prep-agent match --jd examples/sample_job_description.txt \
                            --evidence examples/sample_evidence.yaml --out out/
 ```
 
+### Model-backed extraction
+
+The default extractor is lexical and never leaves the machine. To read prose
+postings, switch the extraction stage to a model:
+
+```bash
+export GEMINI_API_KEY=your-key        # required for this mode only
+export GEMINI_MODEL=gemini-3.5-flash-lite   # optional override
+
+interview-prep-agent match --extractor llm \
+  --jd examples/sample_job_description.txt \
+  --evidence examples/sample_evidence.yaml --out out/
+```
+
+Without a key the mode fails immediately and says so:
+
+```
+error: GEMINI_API_KEY is not set. Export a key, or run with --extractor
+lexical, which needs no credentials.
+```
+
+Model output faces the same grounding gate as the lexical path; a response
+citing text that is not in the posting fails the run rather than entering it.
+
 Tests and lint, the same checks CI runs:
 
 ```bash
@@ -197,9 +245,13 @@ Both stay local; `data/` is not committed. See [`data/README.md`](data/README.md
 
 ## Current state
 
-Works today, covered by 20 tests:
+Works today, covered by 46 tests:
 
 * Requirement extraction from list-formatted postings, wording preserved
+* Model-backed extraction behind a provider seam (`--extractor llm`), its output
+  schema-validated and grounding-checked, never trusted raw
+* The workflow on a graph runtime, with one code-owned conditional edge routing
+  invalid extraction to an error report instead of onward
 * IDF-weighted lexical matching with per-match term attribution
 * Gap-first plan assembly with coverage and traceability gates
 * Per-stage JSON artifacts and a command-line interface
@@ -209,9 +261,10 @@ Known limitations, in order of how much they cost:
 
 * **Matching is lexical.** "Designed randomized experiments" scores zero against
   "A/B testing" — no shared terms. False gaps are the dominant error mode.
-* **Extraction is line-based.** A line bundling three requirements stays one
-  requirement. Postings written as prose fall back to a weaker path that admits
-  sentences stating no requirement.
+* **Model extraction is unmeasured.** The llm path reads prose postings the
+  lexical splitter cannot, and its grounding is verified — but whether it finds
+  the *right* requirements has never been scored against labelled data. The
+  gates prove its quotes are real, not that its judgment is good.
 * **The threshold is unvalidated.** `0.30` was set by inspecting one synthetic
   example, not by tuning against labelled data.
 * **Accuracy is unmeasured.** The gates check structural integrity between

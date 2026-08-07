@@ -31,12 +31,23 @@ output at all.
 
 **Owns** extraction of requirements from a posting, scoring them against an
 evidence corpus, and assembling a gap-first plan. Enforces the coverage,
-traceability and grounding gates.
+traceability and grounding gates. Runs on a state graph: extract, validate,
+then either match and plan, or report the validation errors and stop.
+
+Extraction has two implementations behind one contract — a lexical splitter for
+list-formatted postings, and a model-backed path for prose, reached through a
+provider seam so no stage touches a vendor SDK. Both emit the same
+`Requirement` model, both record the source span that justifies each
+requirement, and both face the same grounding gate. The model is used to read;
+the gate decides what was really there.
 
 **Why fixed.** Extraction always precedes matching, matching always precedes
-assembly, and no result of one step can change which step comes next. There is
-no branch, so nothing is gained by allowing one — and the cost of allowing it is
-that a plan could no longer be reproduced from the same inputs.
+assembly, and the one fork — invalid extraction routes to an error report — is
+taken by a pure predicate over a boolean that gate code computed, with both
+targets wired when the graph is built. Nothing chooses at run time, so a run is
+still reproducible from its inputs; the model-backed extractor is the one
+nondeterministic element, and what it produces is data that must survive
+validation, never a routing choice.
 
 **Boundary.** Everything crosses it as a validated model in `models.py`:
 `Requirement`, `EvidenceItem`, `RequirementMatch`, `FocusPlan`. These are the
@@ -45,9 +56,10 @@ than inside `workflow/`. Higher layers depend on the contract, not on the
 implementation behind it.
 
 **Open inside this layer.** Lexical matching is the dominant error source; a
-semantic scorer belongs behind the existing matcher seam. Bundled requirement
-lines need splitting. The match threshold needs calibrating against real data
-rather than one synthetic example.
+semantic scorer belongs behind the existing matcher seam. The match threshold
+needs calibrating against real data rather than one synthetic example. And the
+model-backed extractor's judgment — whether it finds the right requirements,
+not merely grounded ones — is unmeasured until the evaluation set exists.
 
 ## Layer 2 — bounded decision layer · next
 
@@ -87,6 +99,13 @@ bottom and every layer above inherits it unchanged.
   the interim
 * an evaluation set exists showing the loop does not degrade what Layer 1
   already produces correctly
+
+One precondition that used to be implicit is now met: the workflow already runs
+on a graph with typed state and a validation branch, so this layer arrives as
+new nodes and edges on an existing structure — the provider seam it would call
+through, and the validate-then-route pattern it would extend, are in place. The
+three criteria above are unchanged; none of them is satisfied by the runtime
+alone.
 
 ## Layer 3 — durable state · planned
 
