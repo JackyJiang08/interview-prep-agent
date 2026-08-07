@@ -7,15 +7,16 @@ verify is a hope rather than a constraint — the prompt asks, the gate decides.
 
 from __future__ import annotations
 
-MIN_REQUESTED = 6
-MAX_REQUESTED = 10
+TYPICAL_MIN = 6
+TYPICAL_MAX = 10
 
 INSTRUCTIONS = f"""\
 You read one job posting and return the requirements it states.
 
-Return between {MIN_REQUESTED} and {MAX_REQUESTED} requirements. Split a
-sentence that bundles several distinct demands into one requirement each, and
-merge restatements of the same demand into one.
+Extract every requirement the posting states — typically {TYPICAL_MIN} to
+{TYPICAL_MAX} for a full posting; a short posting yields fewer, and that is the
+correct answer for it. Split a sentence that bundles several distinct demands
+into one requirement each, and merge restatements of the same demand into one.
 
 For every requirement:
 
@@ -37,8 +38,7 @@ For every requirement:
 
 Take requirements only from what the posting says. Do not add demands that are
 conventional for the role but absent from the text, do not infer seniority from
-tone, and do not carry over anything from other postings. A short posting
-yields few requirements, and that is the correct answer for it.
+tone, and do not carry over anything from other postings.
 
 Return nothing except data conforming to the supplied schema.
 """
