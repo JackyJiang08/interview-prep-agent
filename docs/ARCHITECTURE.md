@@ -3,6 +3,22 @@
 Why this is built in layers, what each layer owns, how they meet, and what has
 to be true before the next one is worth building.
 
+## The problem being solved
+
+Preparing for a specific interview is a research task with a deadline. A posting
+states a dozen requirements, the candidate has a body of real experience, and
+somewhere in the gap between the two sits the small set of things actually worth
+rehearsing. Finding that set takes more than one comparison: it means looking up
+what the company ships, noticing which claims are thin, and revising after the
+first conversation reveals what a panel really probes.
+
+Handing all of that to a single model prompt fails in the way
+[`METHODOLOGY.md`](METHODOLOGY.md) describes: fluent output whose claims can be
+checked against nothing. This project answers along two axes — every claim
+carries a pointer to its source, and capability is added a layer at a time,
+each layer no more autonomous than its own decisions require. The rest of this
+document is the second axis worked out in full.
+
 ## The organising principle
 
 Autonomy is a cost, not a feature. A component that decides its own next step is
