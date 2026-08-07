@@ -1,11 +1,12 @@
-"""Stage 3 - assemble the gap-first focus plan and enforce the quality gates.
+"""Stage 3 - assemble the gap-first focus plan behind the quality gates.
 
-The gates are the point of this stage. They are cheap assertions that make the
-three failure modes the design cares about loud rather than silent:
+The checks themselves live in :mod:`.gates`, which is where every deterministic
+guarantee in the workflow is stated once. This stage applies the plan-level
+ones: coverage, so a requirement cannot be dropped or invented between stages,
+and traceability, so a match cannot cite evidence that is not in the corpus.
 
-* coverage - a requirement was dropped or invented between stages
-* traceability - a match cites evidence that is not in the corpus
-* grounding - displayed wording drifted from the source posting
+``QualityGateError`` is re-exported here because this module raised it first
+and callers still import it from this path.
 """
 
 from __future__ import annotations
@@ -21,45 +22,8 @@ from ..models import (
     RequirementMatch,
     Status,
 )
+from .gates import QualityGateError, check_plan
 from .match import METHOD_NAME
-
-
-class QualityGateError(ValueError):
-    """Raised when an artifact violates a stated guarantee of the pipeline."""
-
-
-def _check_gates(
-    requirements: Sequence[Requirement],
-    verdicts: Sequence[RequirementMatch],
-    evidence: Sequence[EvidenceItem],
-) -> None:
-    requirement_ids = [item.id for item in requirements]
-    verdict_ids = [item.requirement_id for item in verdicts]
-
-    if len(set(requirement_ids)) != len(requirement_ids):
-        raise QualityGateError("coverage: duplicate requirement identifiers")
-
-    if set(requirement_ids) != set(verdict_ids):
-        missing = set(requirement_ids) - set(verdict_ids)
-        invented = set(verdict_ids) - set(requirement_ids)
-        raise QualityGateError(
-            "coverage: dropped={} invented={}".format(
-                sorted(missing) or "none", sorted(invented) or "none"
-            )
-        )
-
-    known_evidence = {item.id for item in evidence}
-    for verdict in verdicts:
-        for match in verdict.matches:
-            if match.evidence_id not in known_evidence:
-                raise QualityGateError(
-                    f"traceability: {verdict.requirement_id} cites "
-                    f"unknown evidence {match.evidence_id}"
-                )
-        if verdict.status is Status.PROOF and not verdict.matches:
-            raise QualityGateError(
-                f"traceability: {verdict.requirement_id} is PROOF with no supporting evidence"
-            )
 
 
 def _note(status: Status, verdict: RequirementMatch) -> str:
@@ -82,7 +46,7 @@ def build_focus_plan(
     Raises:
         QualityGateError: If coverage or traceability is violated.
     """
-    _check_gates(requirements, verdicts, evidence)
+    check_plan(requirements, verdicts, evidence)
 
     by_id = {verdict.requirement_id: verdict for verdict in verdicts}
     items: list[PlanItem] = []
@@ -109,3 +73,6 @@ def build_focus_plan(
         items=items,
         method=METHOD_NAME,
     )
+
+
+__all__ = ["QualityGateError", "build_focus_plan"]

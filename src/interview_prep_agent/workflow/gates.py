@@ -1,0 +1,166 @@
+"""Deterministic checks that guard every stage boundary.
+
+Two kinds of caller need these checks, so each one is exposed twice:
+
+* ``collect_*`` returns a list of error strings and decides nothing. The graph
+  uses this form, because a routing predicate has to be a pure function.
+* ``check_*`` raises ``QualityGateError``. Direct callers use this form,
+  which is the behaviour the pipeline has always had — a violated guarantee
+  stops the run rather than returning a plan nobody should trust.
+
+Both forms share one implementation, so the two paths can never disagree about
+what counts as valid.
+"""
+
+from __future__ import annotations
+
+import re
+from collections.abc import Sequence
+
+from ..models import EvidenceItem, Requirement, RequirementMatch, Status
+
+_WHITESPACE = re.compile(r"\s+")
+
+
+class QualityGateError(ValueError):
+    """Raised when an artifact violates a stated guarantee of the pipeline."""
+
+
+def fold(text: str) -> str:
+    """Reduce text to the form used for grounding comparisons.
+
+    Whitespace is collapsed and case is folded, so a quote that differs from
+    the posting only in wrapping or capitalisation still counts as grounded.
+    Nothing else is altered: a quote that drops or adds words does not match.
+    """
+    return _WHITESPACE.sub(" ", text).strip().casefold()
+
+
+def collect_requirement_errors(
+    job_description: str,
+    requirements: Sequence[Requirement],
+    min_requirements: int = 1,
+    max_requirements: int = 50,
+) -> list[str]:
+    """Check an extracted requirement set against the posting it came from.
+
+    Applies four checks, in the order a reader would want them reported:
+    plausible count, unique and sequential identifiers, unique statements, and
+    grounding of every source quote in the posting.
+
+    Args:
+        job_description: The posting the requirements were extracted from.
+        requirements: The extracted set, in the order produced.
+        min_requirements: Fewest requirements a run may produce.
+        max_requirements: Most requirements a run may produce.
+
+    Returns:
+        Human-readable errors, empty when the set is valid.
+    """
+    errors: list[str] = []
+    count = len(requirements)
+
+    if count < min_requirements or count > max_requirements:
+        errors.append(
+            f"coverage: expected between {min_requirements} and "
+            f"{max_requirements} requirements, received {count}"
+        )
+
+    identifiers = [item.id for item in requirements]
+    if len(set(identifiers)) != len(identifiers):
+        errors.append("identity: requirement identifiers must be unique")
+    else:
+        expected = [f"REQ-{index:03d}" for index in range(1, count + 1)]
+        if identifiers and identifiers != expected:
+            errors.append(
+                "identity: requirement identifiers must run sequentially "
+                "from REQ-001 in source order"
+            )
+
+    statements = [fold(item.normalized) for item in requirements]
+    if len(set(statements)) != len(statements):
+        errors.append("identity: requirement statements must be unique")
+
+    folded_posting = fold(job_description)
+    for item in requirements:
+        if item.source_quote is None:
+            errors.append(f"grounding: {item.id} carries no source quote")
+        elif fold(item.source_quote) not in folded_posting:
+            errors.append(
+                f"grounding: {item.id} source quote does not appear in the job description"
+            )
+
+    return errors
+
+
+def check_requirements(
+    job_description: str,
+    requirements: Sequence[Requirement],
+    min_requirements: int = 1,
+    max_requirements: int = 50,
+) -> None:
+    """Raise if an extracted requirement set fails any check.
+
+    Raises:
+        QualityGateError: With every failure listed, not just the first.
+    """
+    errors = collect_requirement_errors(
+        job_description, requirements, min_requirements, max_requirements
+    )
+    if errors:
+        raise QualityGateError("; ".join(errors))
+
+
+def collect_plan_errors(
+    requirements: Sequence[Requirement],
+    verdicts: Sequence[RequirementMatch],
+    evidence: Sequence[EvidenceItem],
+) -> list[str]:
+    """Check that matching neither lost nor invented anything.
+
+    Coverage compares the identifier sets on both sides. Traceability confirms
+    every citation resolves to a real evidence item, and that nothing is marked
+    supported without citing anything at all.
+    """
+    errors: list[str] = []
+
+    requirement_ids = [item.id for item in requirements]
+    verdict_ids = [item.requirement_id for item in verdicts]
+
+    if len(set(requirement_ids)) != len(requirement_ids):
+        errors.append("coverage: duplicate requirement identifiers")
+
+    if set(requirement_ids) != set(verdict_ids):
+        missing = sorted(set(requirement_ids) - set(verdict_ids))
+        invented = sorted(set(verdict_ids) - set(requirement_ids))
+        errors.append(f"coverage: dropped={missing or 'none'} invented={invented or 'none'}")
+
+    known_evidence = {item.id for item in evidence}
+    for verdict in verdicts:
+        for match in verdict.matches:
+            if match.evidence_id not in known_evidence:
+                errors.append(
+                    f"traceability: {verdict.requirement_id} cites "
+                    f"unknown evidence {match.evidence_id}"
+                )
+        if verdict.status is Status.PROOF and not verdict.matches:
+            errors.append(
+                f"traceability: {verdict.requirement_id} is PROOF with no supporting evidence"
+            )
+
+    return errors
+
+
+def check_plan(
+    requirements: Sequence[Requirement],
+    verdicts: Sequence[RequirementMatch],
+    evidence: Sequence[EvidenceItem],
+) -> None:
+    """Raise if matching lost, invented, or mis-cited anything.
+
+    Raises:
+        QualityGateError: With every failure listed, not just the first.
+    """
+    errors = collect_plan_errors(requirements, verdicts, evidence)
+    if errors:
+        raise QualityGateError("; ".join(errors))
