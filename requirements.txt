@@ -1,5 +1,9 @@
 # Runtime dependencies, pinned. Derived from the imports in src/.
-#   pydantic  -> src/interview_prep_agent/models.py, config.py, corpus.py
-#   PyYAML    -> src/interview_prep_agent/config.py, corpus.py
-pydantic==2.11.7
+#   pydantic     -> models.py, config.py, corpus.py
+#   PyYAML       -> config.py, corpus.py
+#   langgraph    -> workflow/graph.py, the workflow runtime
+#   google-genai -> providers/gemini.py, the first structured-model provider
+pydantic==2.13.4
 PyYAML==6.0.2
+langgraph==1.2.10
+google-genai==2.17.0

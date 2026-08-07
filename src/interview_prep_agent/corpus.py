@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Union
 
 import yaml
 from pydantic import ValidationError
@@ -16,7 +15,7 @@ class CorpusError(ValueError):
     """Raised when an input file cannot be read as a valid corpus."""
 
 
-def load_job_description(path: Union[str, Path]) -> str:
+def load_job_description(path: str | Path) -> str:
     """Read a job description as plain text."""
     text = Path(path).read_text(encoding="utf-8")
     if not text.strip():
@@ -24,7 +23,7 @@ def load_job_description(path: Union[str, Path]) -> str:
     return text
 
 
-def load_evidence(path: Union[str, Path]) -> list[EvidenceItem]:
+def load_evidence(path: str | Path) -> list[EvidenceItem]:
     """Read an evidence corpus from a YAML or JSON list.
 
     Each entry needs ``id`` and ``summary``; ``skills`` and ``impact`` are

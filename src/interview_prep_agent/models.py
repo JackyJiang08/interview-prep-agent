@@ -7,24 +7,70 @@ the system as a whole.
 
 from __future__ import annotations
 
-from enum import Enum
-from typing import Optional
+from enum import StrEnum
 
-from pydantic import BaseModel, Field, NonNegativeFloat
+from pydantic import BaseModel, ConfigDict, Field, NonNegativeFloat
+
+
+class RequirementCategory(StrEnum):
+    """The kind of capability a requirement asks for."""
+
+    TECHNICAL = "technical"
+    PRODUCT = "product"
+    ANALYTICS = "analytics"
+    COMMUNICATION = "communication"
+    LEADERSHIP = "leadership"
+    DOMAIN = "domain"
+    EXPERIENCE = "experience"
+    EDUCATION = "education"
+
+
+class RequirementType(StrEnum):
+    """Whether a posting states a requirement as mandatory or desirable."""
+
+    MUST_HAVE = "must_have"
+    PREFERRED = "preferred"
 
 
 class Requirement(BaseModel):
     """A single atomic requirement lifted from a job description.
 
+    One model serves both extraction paths. ``id``, ``text`` and ``normalized``
+    are always populated; the remaining fields are populated by whichever path
+    can honestly supply them, and are ``None`` otherwise rather than guessed.
+
     ``text`` holds the wording exactly as it appeared in the source (after only
     list-marker removal). Downstream stages may read ``normalized`` for
     comparison, but anything shown to a user must quote ``text``.
+
+    ``source_quote`` is the span of the posting that justifies this
+    requirement, and is what the grounding gate checks. Both paths set it: the
+    lexical path because the requirement *is* a span of the posting, the
+    model-backed path because the model is required to copy one.
     """
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     id: str = Field(pattern=r"^REQ-\d{3,}$")
     text: str = Field(min_length=1)
     normalized: str = Field(min_length=1)
-    source_line: int = Field(ge=1)
+    source_quote: str | None = Field(default=None, min_length=1)
+    source_line: int | None = Field(default=None, ge=1)
+    category: RequirementCategory | None = None
+    importance: int | None = Field(default=None, ge=1, le=5)
+    requirement_type: RequirementType | None = None
+
+
+class RequirementExtraction(BaseModel):
+    """Envelope for a model-produced requirement list.
+
+    Exists so the response schema handed to a provider has a single named root
+    object, which is what the structured-output APIs expect.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    requirements: list[Requirement] = Field(default_factory=list)
 
 
 class EvidenceItem(BaseModel):
@@ -33,7 +79,7 @@ class EvidenceItem(BaseModel):
     id: str = Field(pattern=r"^EV-\d{3,}$")
     summary: str = Field(min_length=1)
     skills: list[str] = Field(default_factory=list)
-    impact: Optional[str] = None
+    impact: str | None = None
 
 
 class EvidenceMatch(BaseModel):
@@ -44,7 +90,7 @@ class EvidenceMatch(BaseModel):
     overlapping_terms: list[str] = Field(default_factory=list)
 
 
-class Status(str, Enum):
+class Status(StrEnum):
     """Whether a requirement is supported by the evidence corpus."""
 
     PROOF = "PROOF"
