@@ -18,18 +18,26 @@ from .models import (
     FocusPlan,
     PlanItem,
     Requirement,
+    RequirementCategory,
+    RequirementExtraction,
     RequirementMatch,
+    RequirementType,
     Status,
 )
+from .providers import ProviderError, StructuredModel, build_model
 from .workflow import (
     QualityGateError,
     build_focus_plan,
+    build_workflow,
+    collect_requirement_errors,
     extract_requirements,
+    extract_requirements_with_model,
     match_requirements,
     run_pipeline,
+    run_workflow,
 )
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = [
     "Coverage",
@@ -38,16 +46,26 @@ __all__ = [
     "FocusPlan",
     "PlanItem",
     "QualityGateError",
+    "ProviderError",
     "Requirement",
+    "RequirementCategory",
+    "RequirementExtraction",
     "RequirementMatch",
+    "RequirementType",
     "Settings",
     "Status",
+    "StructuredModel",
     "build_focus_plan",
+    "build_model",
+    "build_workflow",
+    "collect_requirement_errors",
     "extract_requirements",
+    "extract_requirements_with_model",
     "load_evidence",
     "load_job_description",
     "load_settings",
     "match_requirements",
     "run_pipeline",
+    "run_workflow",
     "__version__",
 ]

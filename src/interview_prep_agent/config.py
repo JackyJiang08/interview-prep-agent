@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Optional
 
 import yaml
 from pydantic import BaseModel, Field
@@ -26,8 +25,16 @@ class Settings(BaseModel):
     max_matches_per_requirement: int = Field(default=3, ge=1)
     write_stage_artifacts: bool = True
 
+    # Bounds on how many requirements one run may produce. Deliberately wide:
+    # they are a guard against degenerate extraction — nothing at all, or a
+    # runaway list — not an opinion about how long a posting should be. The
+    # extraction prompt asks for a much narrower range, and a count far outside
+    # it is a signal worth failing on.
+    min_requirements: int = Field(default=1, ge=0)
+    max_requirements: int = Field(default=50, ge=1)
 
-def load_settings(path: Optional[Path] = None) -> Settings:
+
+def load_settings(path: Path | None = None) -> Settings:
     """Load settings from YAML.
 
     Args:
@@ -47,6 +54,6 @@ def load_settings(path: Optional[Path] = None) -> Settings:
     return Settings(**raw)
 
 
-def _from_environment() -> Optional[Path]:
+def _from_environment() -> Path | None:
     value = os.environ.get(ENV_CONFIG_PATH)
     return Path(value) if value else None
