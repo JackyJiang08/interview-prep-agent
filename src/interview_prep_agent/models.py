@@ -74,12 +74,18 @@ class RequirementExtraction(BaseModel):
 
 
 class EvidenceItem(BaseModel):
-    """One attested item from the candidate's evidence corpus."""
+    """One attested item from the candidate's evidence corpus.
+
+    ``source`` records where the item came from — a corpus file, or the resume
+    section that held the bullet — so a citation can be traced past the
+    identifier back to the document.
+    """
 
     id: str = Field(pattern=r"^EV-\d{3,}$")
     summary: str = Field(min_length=1)
     skills: list[str] = Field(default_factory=list)
     impact: str | None = None
+    source: str | None = None
 
 
 class EvidenceMatch(BaseModel):
@@ -164,6 +170,92 @@ class FocusArea(BaseModel):
     priority: int = Field(ge=1, le=15)
     preparation_action: str = Field(min_length=1)
     reason: str = Field(min_length=1)
+
+
+class StrategyItem(BaseModel):
+    """One prioritised line of the interview strategy, tied to a requirement."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    requirement_id: str
+    evidence_ids: list[str] = Field(default_factory=list)
+    preparation_theme: str = Field(min_length=1)
+    rationale: str = Field(min_length=1)
+
+
+class StoryPlan(BaseModel):
+    """One story worth rehearsing, grounded in matched evidence."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    requirement_id: str
+    evidence_ids: list[str] = Field(default_factory=list)
+    story_to_prepare: str = Field(min_length=1)
+
+
+class RiskItem(BaseModel):
+    """One exposure the interview may probe, with a mitigation."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    requirement_id: str
+    risk: str = Field(min_length=1)
+    mitigation: str = Field(min_length=1)
+
+
+class InterviewStrategy(BaseModel):
+    """The strategy layer over the focus areas.
+
+    Doubles as the response schema for the strategy node — it is already a
+    single named root object, so no envelope is needed.
+    """
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    top_priorities: list[StrategyItem] = Field(default_factory=list)
+    positioning_statement: str = Field(min_length=1)
+    stories_to_prepare: list[StoryPlan] = Field(default_factory=list)
+    risks_to_address: list[RiskItem] = Field(default_factory=list)
+
+
+class MockQuestion(BaseModel):
+    """One practice question, traceable to the requirement it probes."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    question: str = Field(min_length=1)
+    requirement_id: str
+    capability_tested: str = Field(min_length=1)
+    evidence_ids: list[str] = Field(default_factory=list)
+    follow_up_probe: str = Field(min_length=1)
+    answer_outline: list[str] = Field(min_length=2)
+
+
+class MockQuestionList(BaseModel):
+    """Envelope for a model-produced question list.
+
+    Carries no minimum length on purpose: the question floor is a package
+    gate, and enforcing it in the response schema would turn a routable
+    shortfall into a hard parse failure.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    mock_questions: list[MockQuestion] = Field(default_factory=list)
+
+
+class PrepPackage(BaseModel):
+    """The validated, candidate-facing preparation product.
+
+    Assembled only after the package gate passes, so holding one implies the
+    identifier chain resolves end to end.
+    """
+
+    requirements: list[Requirement] = Field(default_factory=list)
+    matches: list[RequirementMatch] = Field(default_factory=list)
+    focus_areas: list[FocusArea] = Field(default_factory=list)
+    strategy: InterviewStrategy
+    mock_questions: list[MockQuestion] = Field(default_factory=list)
 
 
 class PlanItem(BaseModel):
