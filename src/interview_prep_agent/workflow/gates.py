@@ -15,9 +15,10 @@ what counts as valid.
 from __future__ import annotations
 
 import re
+from collections import Counter
 from collections.abc import Sequence
 
-from ..models import EvidenceItem, Requirement, RequirementMatch, Status
+from ..models import CoverageLevel, EvidenceItem, Requirement, RequirementMatch, Status
 
 _WHITESPACE = re.compile(r"\s+")
 
@@ -107,6 +108,79 @@ def check_requirements(
     errors = collect_requirement_errors(
         job_description, requirements, min_requirements, max_requirements
     )
+    if errors:
+        raise QualityGateError("; ".join(errors))
+
+
+def collect_match_errors(
+    requirements: Sequence[Requirement],
+    verdicts: Sequence[RequirementMatch],
+    evidence: Sequence[EvidenceItem],
+) -> list[str]:
+    """Check a matcher's verdict set, whichever matcher produced it.
+
+    Four guarantees: every requirement is matched exactly once and nothing
+    else is; verdicts follow the requirements' order; every cited evidence
+    identifier exists in the corpus; and a verdict's coverage agrees with its
+    citations — a gap cites nothing, anything else cites at least one item.
+    """
+    errors: list[str] = []
+
+    requirement_ids = [item.id for item in requirements]
+    verdict_ids = [item.requirement_id for item in verdicts]
+    verdict_id_set = set(verdict_ids)
+
+    counts = Counter(verdict_ids)
+    duplicates = sorted(identifier for identifier, count in counts.items() if count > 1)
+    if duplicates:
+        errors.append(f"identity: requirements matched more than once: {', '.join(duplicates)}")
+
+    missing = sorted(set(requirement_ids) - verdict_id_set)
+    if missing:
+        errors.append(f"coverage: requirements never matched: {', '.join(missing)}")
+
+    unknown = sorted(verdict_id_set - set(requirement_ids))
+    if unknown:
+        errors.append(f"coverage: verdicts for unknown requirements: {', '.join(unknown)}")
+
+    if not missing and not unknown and len(verdict_id_set) == len(verdict_ids):
+        if verdict_ids != requirement_ids:
+            errors.append("identity: verdicts must follow the requirements' order")
+
+    known_evidence = {item.id for item in evidence}
+    for verdict in verdicts:
+        cited = [match.evidence_id for match in verdict.matches]
+        unknown_cited = sorted(set(cited) - known_evidence)
+        if unknown_cited:
+            errors.append(
+                f"traceability: {verdict.requirement_id} cites "
+                f"unknown evidence {', '.join(unknown_cited)}"
+            )
+        if len(set(cited)) != len(cited):
+            errors.append(f"traceability: {verdict.requirement_id} cites evidence twice")
+
+        if verdict.coverage is CoverageLevel.GAP and cited:
+            errors.append(f"grounding: {verdict.requirement_id} is GAP and must not cite evidence")
+        if verdict.coverage in (CoverageLevel.FULL, CoverageLevel.PARTIAL) and not cited:
+            errors.append(
+                f"grounding: {verdict.requirement_id} is {verdict.coverage.value} "
+                "with no supporting evidence"
+            )
+
+    return errors
+
+
+def check_matches(
+    requirements: Sequence[Requirement],
+    verdicts: Sequence[RequirementMatch],
+    evidence: Sequence[EvidenceItem],
+) -> None:
+    """Raise if a matcher's verdict set fails any check.
+
+    Raises:
+        QualityGateError: With every failure listed, not just the first.
+    """
+    errors = collect_match_errors(requirements, verdicts, evidence)
     if errors:
         raise QualityGateError("; ".join(errors))
 

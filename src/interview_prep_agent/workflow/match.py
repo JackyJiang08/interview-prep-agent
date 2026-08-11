@@ -12,7 +12,14 @@ import math
 import re
 from collections.abc import Sequence
 
-from ..models import EvidenceItem, EvidenceMatch, Requirement, RequirementMatch, Status
+from ..models import (
+    CoverageLevel,
+    EvidenceItem,
+    EvidenceMatch,
+    Requirement,
+    RequirementMatch,
+    Status,
+)
 
 METHOD_NAME = "lexical-idf-v1"
 
@@ -173,7 +180,18 @@ def match_requirements(
     threshold: float,
     max_matches: int,
 ) -> list[RequirementMatch]:
-    """Label every requirement PROOF or GAP against the evidence corpus.
+    """Label every requirement against the evidence corpus.
+
+    Coverage semantics of this path: a top score at or above ``threshold`` is
+    ``FULL``, below it is ``GAP``, and ``PARTIAL`` is never emitted. Term
+    overlap can measure how much of a requirement's vocabulary the evidence
+    attests, but it cannot tell a fully-covered requirement from one whose
+    unattested *dimension* matters — recognising a missing dimension takes
+    reading, not counting. Claiming ``PARTIAL`` from a middling score would
+    dress that ignorance up as a judgment.
+
+    Confidence is the top evidence score, unchanged; the explanation states
+    the overlapping terms that produced the verdict, or the absence of any.
 
     Args:
         requirements: Output of the extraction stage.
@@ -207,12 +225,25 @@ def match_requirements(
             reverse=True,
         )[:max_matches]
 
+        if ranked:
+            top = ranked[0]
+            explanation = "Terms shared with {}: {} (score {:.2f}).".format(
+                top.evidence_id,
+                ", ".join(top.overlapping_terms) or "none",
+                top.score,
+            )
+        else:
+            explanation = "No supplied evidence reaches the match threshold."
+
         verdicts.append(
             RequirementMatch(
                 requirement_id=requirement.id,
                 status=Status.PROOF if ranked else Status.GAP,
                 matches=ranked,
                 method=METHOD_NAME,
+                coverage=CoverageLevel.FULL if ranked else CoverageLevel.GAP,
+                explanation=explanation,
+                confidence=ranked[0].score if ranked else 0.0,
             )
         )
 

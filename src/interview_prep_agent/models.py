@@ -91,19 +91,79 @@ class EvidenceMatch(BaseModel):
 
 
 class Status(StrEnum):
-    """Whether a requirement is supported by the evidence corpus."""
+    """Whether a requirement is supported by the evidence corpus.
+
+    The binary view of :data:`CoverageLevel`: every level except ``GAP``
+    collapses to ``PROOF``. Kept because the plan and its committed artifacts
+    speak in these terms.
+    """
 
     PROOF = "PROOF"
     GAP = "GAP"
 
 
+class CoverageLevel(StrEnum):
+    """How completely the supplied evidence covers one requirement."""
+
+    FULL = "FULL"
+    PARTIAL = "PARTIAL"
+    GAP = "GAP"
+
+
 class RequirementMatch(BaseModel):
-    """The matcher's verdict for one requirement."""
+    """The matcher's verdict for one requirement.
+
+    ``status`` is the degenerate binary view of ``coverage``: anything except
+    a gap is proof. ``coverage``, ``explanation`` and ``confidence`` are set by
+    every matcher; they are optional only so that verdicts built before these
+    fields existed remain constructible, and ``None`` reads as unknown, never
+    as full.
+    """
 
     requirement_id: str
     status: Status
     matches: list[EvidenceMatch] = Field(default_factory=list)
     method: str
+    coverage: CoverageLevel | None = None
+    explanation: str | None = Field(default=None, min_length=1)
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+
+
+class MatchAssessment(BaseModel):
+    """One requirement's coverage as a provider is asked to report it.
+
+    The response-schema shape for model-backed matching, converted into
+    ``RequirementMatch`` immediately after validation — nothing downstream
+    consumes this model. It cites evidence by identifier only, because a
+    provider has no scores or term overlaps to offer, and inventing them
+    here would dress model output as measurement.
+    """
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    requirement_id: str
+    evidence_ids: list[str] = Field(default_factory=list)
+    coverage: CoverageLevel
+    explanation: str = Field(min_length=1)
+    confidence: float = Field(ge=0.0, le=1.0)
+
+
+class MatchAssessmentList(BaseModel):
+    """Envelope for a model-produced assessment list, one per requirement."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    assessments: list[MatchAssessment] = Field(default_factory=list)
+
+
+class FocusArea(BaseModel):
+    """One deterministic recommendation for allocating preparation time."""
+
+    requirement_id: str
+    coverage: CoverageLevel
+    priority: int = Field(ge=1, le=15)
+    preparation_action: str = Field(min_length=1)
+    reason: str = Field(min_length=1)
 
 
 class PlanItem(BaseModel):
