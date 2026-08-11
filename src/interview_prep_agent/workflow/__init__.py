@@ -36,6 +36,7 @@ from .pipeline import (
     PLAN_ARTIFACT,
     REQUIREMENTS_ARTIFACT,
     run_pipeline,
+    run_prep,
     run_workflow,
 )
 from .plan import build_focus_plan
@@ -69,6 +70,7 @@ __all__ = [
     "parse_extraction",
     "route_after_validation",
     "run_pipeline",
+    "run_prep",
     "run_workflow",
     "score_requirement",
     "tokenize",

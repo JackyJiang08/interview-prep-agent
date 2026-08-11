@@ -23,13 +23,16 @@ from ..providers import StructuredModel
 from .extract import extract_requirements
 from .extract_model import extract_requirements_with_model
 from .gates import QualityGateError
-from .graph import WorkflowState, build_workflow
+from .graph import PrepState, WorkflowState, build_prep_workflow, build_workflow
 from .match_model import match_evidence_with_model
 
 REQUIREMENTS_ARTIFACT = "requirements.json"
 MATCHES_ARTIFACT = "matches.json"
 FOCUS_AREAS_ARTIFACT = "focus_areas.json"
 PLAN_ARTIFACT = "focus_plan.json"
+STRATEGY_ARTIFACT = "strategy.json"
+QUESTIONS_ARTIFACT = "questions.json"
+PACKAGE_ARTIFACT = "prep_package.json"
 
 LEXICAL = "lexical"
 MODEL_BACKED = "llm"
@@ -183,6 +186,99 @@ def _dump(path: Path, payload: object) -> None:
         handle.write("\n")
 
 
+def run_prep(
+    job_description: str,
+    evidence_source: str,
+    evidence_format: str,
+    settings=None,
+    output_dir: Path | None = None,
+    extractor: str = LEXICAL,
+    matcher: str = LEXICAL,
+    model: StructuredModel | None = None,
+) -> PrepState:
+    """Run the full preparation graph and return its final state.
+
+    Package validation failures are reported in the state rather than raised —
+    routing on them is the graph's job — while input, grounding and match
+    violations raise, exactly as they do on the shorter path.
+
+    Per-stage artifacts are written for whatever the run produced; the package
+    artifact is written only when the run was valid, because an artifact that
+    failed its gate must not exist where something might read it.
+
+    Args:
+        job_description: Raw posting text.
+        evidence_source: Raw evidence text — a corpus file's content, or a
+            markdown resume.
+        evidence_format: ``"markdown"`` or ``"corpus"``.
+        settings: Pipeline settings; packaged defaults are used if omitted.
+        output_dir: Where to write artifacts. Nothing is written when omitted
+            or when ``write_stage_artifacts`` is off.
+        extractor: ``"lexical"`` or ``"llm"``.
+        matcher: ``"lexical"`` or ``"llm"``.
+        model: Provider for the strategy and question nodes, and for any stage
+            set to ``"llm"``; one instance serves all of them.
+
+    Returns:
+        Final state, including ``prep_package`` when valid and
+        ``validation_errors`` when not.
+    """
+    from ..config import load_settings
+
+    settings = settings or load_settings()
+    workflow = build_prep_workflow(
+        extractor=_resolve_extractor(extractor, model),
+        matcher=_resolve_matcher(matcher, model),
+        model=model,
+        match_threshold=settings.match_threshold,
+        max_matches=settings.max_matches_per_requirement,
+        min_requirements=settings.min_requirements,
+        max_requirements=settings.max_requirements,
+    )
+    state = workflow.invoke(
+        {
+            "job_description": job_description,
+            "evidence_source": evidence_source,
+            "evidence_format": evidence_format,
+        }
+    )
+
+    if output_dir is not None and settings.write_stage_artifacts:
+        _write_prep_artifacts(Path(output_dir), state)
+
+    return state
+
+
+def _write_prep_artifacts(output_dir: Path, state: PrepState) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    _dump(
+        output_dir / REQUIREMENTS_ARTIFACT,
+        [item.model_dump(mode="json", exclude_none=True) for item in state.get("requirements", [])],
+    )
+    _dump(
+        output_dir / MATCHES_ARTIFACT,
+        [item.model_dump(mode="json") for item in state.get("matches", [])],
+    )
+    _dump(
+        output_dir / FOCUS_AREAS_ARTIFACT,
+        [item.model_dump(mode="json") for item in state.get("focus_areas", [])],
+    )
+    strategy = state.get("strategy")
+    if strategy is not None:
+        _dump(output_dir / STRATEGY_ARTIFACT, strategy.model_dump(mode="json"))
+    _dump(
+        output_dir / QUESTIONS_ARTIFACT,
+        [item.model_dump(mode="json") for item in state.get("mock_questions", [])],
+    )
+    package = state.get("prep_package")
+    if package is not None:
+        _dump(
+            output_dir / PACKAGE_ARTIFACT,
+            package.model_dump(mode="json", exclude_none=True),
+        )
+
+
 __all__ = [
     "EXTRACTORS",
     "FOCUS_AREAS_ARTIFACT",
@@ -190,8 +286,12 @@ __all__ = [
     "MATCHERS",
     "MATCHES_ARTIFACT",
     "MODEL_BACKED",
+    "PACKAGE_ARTIFACT",
     "PLAN_ARTIFACT",
+    "QUESTIONS_ARTIFACT",
     "REQUIREMENTS_ARTIFACT",
+    "STRATEGY_ARTIFACT",
     "run_pipeline",
+    "run_prep",
     "run_workflow",
 ]

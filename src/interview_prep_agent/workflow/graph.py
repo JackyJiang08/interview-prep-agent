@@ -32,12 +32,30 @@ from typing import Any, Literal, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
-from ..models import EvidenceItem, FocusArea, FocusPlan, Requirement, RequirementMatch
+from ..corpus import CorpusError, parse_evidence_corpus, parse_evidence_markdown
+from ..models import (
+    EvidenceItem,
+    FocusArea,
+    FocusPlan,
+    InterviewStrategy,
+    MockQuestion,
+    PrepPackage,
+    Requirement,
+    RequirementMatch,
+)
+from ..providers import StructuredModel
 from .assess import build_focus_areas
 from .extract import extract_requirements
-from .gates import check_matches, collect_requirement_errors
+from .gates import (
+    check_matches,
+    check_requirements,
+    collect_package_errors,
+    collect_requirement_errors,
+)
 from .match import match_requirements
 from .plan import build_focus_plan
+from .questions import generate_questions_with_model
+from .strategy import build_strategy_with_model
 
 Extractor = Callable[[str], list[Requirement]]
 Matcher = Callable[[list[Requirement], list[EvidenceItem]], list[RequirementMatch]]
@@ -179,3 +197,224 @@ def route_after_validation(state: WorkflowState) -> Literal["valid", "invalid"]:
     graph above.
     """
     return "valid" if state.get("requirements_valid") else "invalid"
+
+
+class PrepState(TypedDict, total=False):
+    """Business state for the full preparation graph.
+
+    Same discipline as ``WorkflowState``: inputs at entry, every other field
+    written by exactly one node, nothing about how a value was produced.
+    """
+
+    # inputs
+    job_description: str
+    evidence_source: str
+    evidence_format: str
+    # derived source evidence
+    evidence: list[EvidenceItem]
+    # grounded intermediates
+    requirements: list[Requirement]
+    matches: list[RequirementMatch]
+    focus_areas: list[FocusArea]
+    # preparation outputs
+    strategy: InterviewStrategy | None
+    mock_questions: list[MockQuestion]
+    prep_package: PrepPackage | None
+    # reliability
+    validation_errors: list[str]
+    package_valid: bool
+    status: str
+
+
+class PrepInput(TypedDict):
+    """Values the caller supplies when the preparation graph starts."""
+
+    job_description: str
+    evidence_source: str
+    evidence_format: str
+
+
+def build_prep_workflow(
+    extractor: Extractor = extract_requirements,
+    matcher: Matcher | None = None,
+    model: StructuredModel | None = None,
+    match_threshold: float = 0.30,
+    max_matches: int = 3,
+    min_requirements: int = 1,
+    max_requirements: int = 50,
+    min_questions: int = 8,
+):
+    """Compile the full preparation workflow.
+
+        START -> validate_inputs -> extract_evidence -> extract_requirements
+              -> match -> assess_gaps -> build_strategy -> generate_questions
+              -> validate_package -|- valid   -> assemble_package -> END
+                                   |- invalid -> report_errors    -> END
+
+    The same argument as ``build_workflow``, extended over more nodes: both
+    branch targets are fixed when the graph is built, the routing predicate is
+    a pure function over a boolean that deterministic gate code computed, and
+    the models inside build_strategy and generate_questions produce data that
+    the package gate then judges — no model ever selects the next node, and no
+    model approves its own output.
+
+    Deterministic guards raise inside the nodes that can violate them
+    (extraction grounding, match consistency); the composed and generated
+    layers are judged once, at validate_package, so a shortfall there routes
+    to the error report instead of aborting — the run ends with its errors
+    listed, which is a result, not a crash.
+
+    Args:
+        extractor: Stage 1 implementation; defaults to the lexical splitter.
+        matcher: Stage 2 implementation; None selects the lexical scorer.
+        model: Provider for the strategy and question nodes. Resolved lazily
+            when omitted, so the graph itself compiles offline.
+        match_threshold: Minimum score for the lexical matcher.
+        max_matches: Citation cap per requirement for the lexical matcher.
+        min_requirements: Fewest requirements a run may produce.
+        max_requirements: Most requirements a run may produce.
+        min_questions: Question floor enforced by the package gate.
+
+    Returns:
+        A compiled graph accepting ``PrepInput``.
+    """
+
+    def resolve_model() -> StructuredModel:
+        if model is not None:
+            return model
+        from ..providers import build_model
+
+        return build_model()
+
+    def validate_inputs(state: PrepState) -> dict[str, Any]:
+        if not state["job_description"].strip():
+            raise CorpusError("the job description is empty")
+        if not state["evidence_source"].strip():
+            raise CorpusError("the evidence source is empty")
+        return {}
+
+    def extract_evidence(state: PrepState) -> dict[str, Any]:
+        if state["evidence_format"] == "markdown":
+            items = parse_evidence_markdown(state["evidence_source"])
+        else:
+            items = parse_evidence_corpus(state["evidence_source"], "the supplied evidence")
+        return {"evidence": items}
+
+    def extract_requirements_node(state: PrepState) -> dict[str, Any]:
+        requirements = extractor(state["job_description"])
+        check_requirements(
+            state["job_description"],
+            requirements,
+            min_requirements=min_requirements,
+            max_requirements=max_requirements,
+        )
+        return {"requirements": requirements}
+
+    def match(state: PrepState) -> dict[str, Any]:
+        if matcher is not None:
+            verdicts = matcher(state["requirements"], state["evidence"])
+        else:
+            verdicts = match_requirements(
+                state["requirements"],
+                state["evidence"],
+                threshold=match_threshold,
+                max_matches=max_matches,
+            )
+        check_matches(state["requirements"], verdicts, state["evidence"])
+        return {"matches": verdicts}
+
+    def assess_gaps(state: PrepState) -> dict[str, Any]:
+        return {"focus_areas": build_focus_areas(state["requirements"], state["matches"])}
+
+    def build_strategy(state: PrepState) -> dict[str, Any]:
+        return {
+            "strategy": build_strategy_with_model(
+                state["requirements"],
+                state["matches"],
+                state["focus_areas"],
+                resolve_model(),
+            )
+        }
+
+    def generate_questions(state: PrepState) -> dict[str, Any]:
+        return {
+            "mock_questions": generate_questions_with_model(
+                state["requirements"],
+                state["matches"],
+                state["strategy"],
+                resolve_model(),
+            )
+        }
+
+    def validate_package(state: PrepState) -> dict[str, Any]:
+        errors = collect_package_errors(
+            state["job_description"],
+            state.get("evidence", []),
+            state.get("requirements", []),
+            state.get("matches", []),
+            state.get("focus_areas", []),
+            state.get("strategy"),
+            state.get("mock_questions", []),
+            min_questions=min_questions,
+        )
+        return {"validation_errors": errors, "package_valid": not errors}
+
+    def assemble_package(state: PrepState) -> dict[str, Any]:
+        return {
+            "status": "complete",
+            "prep_package": PrepPackage(
+                requirements=state["requirements"],
+                matches=state["matches"],
+                focus_areas=state["focus_areas"],
+                strategy=state["strategy"],
+                mock_questions=state["mock_questions"],
+            ),
+        }
+
+    def report_errors(_state: PrepState) -> dict[str, Any]:
+        """End the run without a package, leaving the errors in place."""
+        return {"status": "invalid", "prep_package": None}
+
+    builder = StateGraph(PrepState, input_schema=PrepInput)
+    builder.add_node("validate_inputs", validate_inputs)
+    builder.add_node("extract_evidence", extract_evidence)
+    builder.add_node("extract_requirements", extract_requirements_node)
+    builder.add_node("match", match)
+    builder.add_node("assess_gaps", assess_gaps)
+    builder.add_node("build_strategy", build_strategy)
+    builder.add_node("generate_questions", generate_questions)
+    builder.add_node("validate_package", validate_package)
+    builder.add_node("assemble_package", assemble_package)
+    builder.add_node("report_errors", report_errors)
+
+    builder.add_edge(START, "validate_inputs")
+    builder.add_edge("validate_inputs", "extract_evidence")
+    builder.add_edge("extract_evidence", "extract_requirements")
+    builder.add_edge("extract_requirements", "match")
+    builder.add_edge("match", "assess_gaps")
+    builder.add_edge("assess_gaps", "build_strategy")
+    builder.add_edge("build_strategy", "generate_questions")
+    builder.add_edge("generate_questions", "validate_package")
+    builder.add_conditional_edges(
+        "validate_package",
+        route_after_package,
+        {"valid": "assemble_package", "invalid": "report_errors"},
+    )
+    builder.add_edge("assemble_package", END)
+    builder.add_edge("report_errors", END)
+    return builder.compile()
+
+
+def route_after_package(state: PrepState) -> Literal["valid", "invalid"]:
+    """Pick a branch from the package validation outcome.
+
+    A pure function of one boolean that gate code wrote, returning one of the
+    two literals wired into the graph above.
+    """
+    return "valid" if state.get("package_valid") else "invalid"
+
+
+# Module-level compiled graphs, for local graph tooling. The preparation graph
+# compiles offline; its model nodes resolve a provider only when they run.
+graph = build_workflow()
+prep_graph = build_prep_workflow()
