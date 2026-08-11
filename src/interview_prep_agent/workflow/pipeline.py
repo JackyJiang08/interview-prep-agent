@@ -18,20 +18,23 @@ import json
 from collections.abc import Sequence
 from pathlib import Path
 
-from ..models import EvidenceItem, FocusPlan, Requirement, RequirementMatch
+from ..models import EvidenceItem, FocusArea, FocusPlan, Requirement, RequirementMatch
 from ..providers import StructuredModel
 from .extract import extract_requirements
 from .extract_model import extract_requirements_with_model
 from .gates import QualityGateError
 from .graph import WorkflowState, build_workflow
+from .match_model import match_evidence_with_model
 
 REQUIREMENTS_ARTIFACT = "requirements.json"
 MATCHES_ARTIFACT = "matches.json"
+FOCUS_AREAS_ARTIFACT = "focus_areas.json"
 PLAN_ARTIFACT = "focus_plan.json"
 
 LEXICAL = "lexical"
 MODEL_BACKED = "llm"
 EXTRACTORS = (LEXICAL, MODEL_BACKED)
+MATCHERS = (LEXICAL, MODEL_BACKED)
 
 
 def _resolve_extractor(extractor: str, model: StructuredModel | None):
@@ -46,12 +49,28 @@ def _resolve_extractor(extractor: str, model: StructuredModel | None):
     raise ValueError(f"unknown extractor {extractor!r}; choose from {', '.join(EXTRACTORS)}")
 
 
+def _resolve_matcher(matcher: str, model: StructuredModel | None):
+    """Return a matcher callable for the graph, or None for the built-in default."""
+    if matcher == LEXICAL:
+        return None
+    if matcher == MODEL_BACKED:
+        if model is None:
+            raise ValueError(
+                "the llm matcher needs a provider; pass model=... or use the lexical matcher"
+            )
+        return lambda requirements, evidence: match_evidence_with_model(
+            requirements, evidence, model
+        )
+    raise ValueError(f"unknown matcher {matcher!r}; choose from {', '.join(MATCHERS)}")
+
+
 def run_workflow(
     job_description: str,
     evidence: Sequence[EvidenceItem],
     settings=None,
     extractor: str = LEXICAL,
     model: StructuredModel | None = None,
+    matcher: str = LEXICAL,
 ) -> WorkflowState:
     """Run the graph and return its final state.
 
@@ -63,7 +82,9 @@ def run_workflow(
         evidence: The candidate's evidence corpus.
         settings: Pipeline settings; packaged defaults are used if omitted.
         extractor: ``"lexical"`` or ``"llm"``.
-        model: Provider used when ``extractor`` is ``"llm"``.
+        model: Provider used when either stage is ``"llm"``; one instance
+            serves both.
+        matcher: ``"lexical"`` or ``"llm"``.
 
     Returns:
         Final state, including ``plan`` when valid and ``validation_errors``
@@ -74,6 +95,7 @@ def run_workflow(
     settings = settings or load_settings()
     workflow = build_workflow(
         extractor=_resolve_extractor(extractor, model),
+        matcher=_resolve_matcher(matcher, model),
         match_threshold=settings.match_threshold,
         max_matches=settings.max_matches_per_requirement,
         min_requirements=settings.min_requirements,
@@ -89,6 +111,7 @@ def run_pipeline(
     output_dir: Path | None = None,
     extractor: str = LEXICAL,
     model: StructuredModel | None = None,
+    matcher: str = LEXICAL,
 ) -> FocusPlan:
     """Run the workflow and return the plan.
 
@@ -99,10 +122,12 @@ def run_pipeline(
         output_dir: Where to write per-stage artifacts. Nothing is written when
             omitted or when ``write_stage_artifacts`` is off.
         extractor: ``"lexical"`` or ``"llm"``.
-        model: Provider used when ``extractor`` is ``"llm"``.
+        model: Provider used when either stage is ``"llm"``; one instance
+            serves both.
+        matcher: ``"lexical"`` or ``"llm"``.
 
     Returns:
-        The gap-first focus plan.
+        The focus plan, ordered by preparation priority.
 
     Raises:
         QualityGateError: If extraction produced a requirement set that fails
@@ -111,14 +136,20 @@ def run_pipeline(
     from ..config import load_settings
 
     settings = settings or load_settings()
-    state = run_workflow(job_description, evidence, settings, extractor, model)
+    state = run_workflow(job_description, evidence, settings, extractor, model, matcher)
 
     if not state.get("requirements_valid", False):
         raise QualityGateError("; ".join(state.get("validation_errors", [])))
 
     plan = state["plan"]
     if output_dir is not None and settings.write_stage_artifacts:
-        _write_artifacts(Path(output_dir), state["requirements"], state["matches"], plan)
+        _write_artifacts(
+            Path(output_dir),
+            state["requirements"],
+            state["matches"],
+            state["focus_areas"],
+            plan,
+        )
     return plan
 
 
@@ -126,6 +157,7 @@ def _write_artifacts(
     output_dir: Path,
     requirements: list[Requirement],
     verdicts: list[RequirementMatch],
+    focus_areas: list[FocusArea],
     plan: FocusPlan,
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -138,6 +170,10 @@ def _write_artifacts(
         output_dir / MATCHES_ARTIFACT,
         [item.model_dump(mode="json") for item in verdicts],
     )
+    _dump(
+        output_dir / FOCUS_AREAS_ARTIFACT,
+        [item.model_dump(mode="json") for item in focus_areas],
+    )
     _dump(output_dir / PLAN_ARTIFACT, plan.model_dump(mode="json", exclude_none=True))
 
 
@@ -149,7 +185,9 @@ def _dump(path: Path, payload: object) -> None:
 
 __all__ = [
     "EXTRACTORS",
+    "FOCUS_AREAS_ARTIFACT",
     "LEXICAL",
+    "MATCHERS",
     "MATCHES_ARTIFACT",
     "MODEL_BACKED",
     "PLAN_ARTIFACT",

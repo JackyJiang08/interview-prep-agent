@@ -1,7 +1,7 @@
 """The workflow as a state graph.
 
     START -> extract -> validate_requirements
-                          |- valid   -> match -> plan -> assemble -> END
+                          |- valid   -> match -> assess -> plan -> assemble -> END
                           |- invalid -> report_errors -> END
 
 Moving to a graph runtime changes how the stages are wired, not who decides.
@@ -32,13 +32,15 @@ from typing import Any, Literal, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
-from ..models import EvidenceItem, FocusPlan, Requirement, RequirementMatch
+from ..models import EvidenceItem, FocusArea, FocusPlan, Requirement, RequirementMatch
+from .assess import build_focus_areas
 from .extract import extract_requirements
-from .gates import collect_requirement_errors
+from .gates import check_matches, collect_requirement_errors
 from .match import match_requirements
 from .plan import build_focus_plan
 
 Extractor = Callable[[str], list[Requirement]]
+Matcher = Callable[[list[Requirement], list[EvidenceItem]], list[RequirementMatch]]
 
 
 class WorkflowState(TypedDict, total=False):
@@ -54,6 +56,7 @@ class WorkflowState(TypedDict, total=False):
     # grounded intermediates
     requirements: list[Requirement]
     matches: list[RequirementMatch]
+    focus_areas: list[FocusArea]
     plan: FocusPlan | None
     # reliability
     validation_errors: list[str]
@@ -70,6 +73,7 @@ class WorkflowInput(TypedDict):
 
 def build_workflow(
     extractor: Extractor = extract_requirements,
+    matcher: Matcher | None = None,
     match_threshold: float = 0.30,
     max_matches: int = 3,
     min_requirements: int = 1,
@@ -81,6 +85,10 @@ def build_workflow(
         extractor: Stage 1 implementation. Defaults to the lexical splitter;
             the model-backed path is injected here rather than selected inside
             a node, so the graph shape is identical either way.
+        matcher: Stage 2 implementation, same injection pattern. Defaults to
+            the lexical scorer configured with ``match_threshold`` and
+            ``max_matches``; those two settings are ignored when a matcher is
+            supplied, because the caller has already configured it.
         match_threshold: Minimum score for a requirement to count as supported.
         max_matches: Cap on evidence items cited per requirement.
         min_requirements: Fewest requirements a run may produce.
@@ -103,18 +111,33 @@ def build_workflow(
         return {"validation_errors": errors, "requirements_valid": not errors}
 
     def match(state: WorkflowState) -> dict[str, Any]:
-        return {
-            "matches": match_requirements(
+        if matcher is not None:
+            verdicts = matcher(state["requirements"], state["evidence"])
+        else:
+            verdicts = match_requirements(
                 state["requirements"],
                 state["evidence"],
                 threshold=match_threshold,
                 max_matches=max_matches,
             )
-        }
+        # Both matcher paths face the same deterministic guard, and a failure
+        # raises: a verdict set that lost a requirement or cited unknown
+        # evidence must not reach assessment, and no substitute is fetched in
+        # its place (see docs/DECISIONS.md on the absence of fallbacks).
+        check_matches(state["requirements"], verdicts, state["evidence"])
+        return {"matches": verdicts}
+
+    def assess(state: WorkflowState) -> dict[str, Any]:
+        return {"focus_areas": build_focus_areas(state["requirements"], state["matches"])}
 
     def plan(state: WorkflowState) -> dict[str, Any]:
         return {
-            "plan": build_focus_plan(state["requirements"], state["matches"], state["evidence"])
+            "plan": build_focus_plan(
+                state["requirements"],
+                state["matches"],
+                state["evidence"],
+                focus_areas=state["focus_areas"],
+            )
         }
 
     def assemble(_state: WorkflowState) -> dict[str, Any]:
@@ -128,6 +151,7 @@ def build_workflow(
     builder.add_node("extract", extract)
     builder.add_node("validate_requirements", validate_requirements)
     builder.add_node("match", match)
+    builder.add_node("assess", assess)
     builder.add_node("plan", plan)
     builder.add_node("assemble", assemble)
     builder.add_node("report_errors", report_errors)
@@ -139,7 +163,8 @@ def build_workflow(
         route_after_validation,
         {"valid": "match", "invalid": "report_errors"},
     )
-    builder.add_edge("match", "plan")
+    builder.add_edge("match", "assess")
+    builder.add_edge("assess", "plan")
     builder.add_edge("plan", "assemble")
     builder.add_edge("assemble", END)
     builder.add_edge("report_errors", END)

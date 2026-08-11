@@ -11,20 +11,26 @@ regardless of what calls in.
 
 from __future__ import annotations
 
+from .assess import build_focus_areas
 from .extract import extract_requirements, normalize
 from .extract_model import extract_requirements_with_model, parse_extraction
 from .gates import (
     QualityGateError,
+    check_matches,
     check_plan,
     check_requirements,
+    collect_match_errors,
     collect_plan_errors,
     collect_requirement_errors,
 )
 from .graph import WorkflowState, build_workflow, route_after_validation
 from .match import METHOD_NAME, match_requirements, score_requirement, tokenize
+from .match_model import match_evidence_with_model
 from .pipeline import (
     EXTRACTORS,
+    FOCUS_AREAS_ARTIFACT,
     LEXICAL,
+    MATCHERS,
     MATCHES_ARTIFACT,
     MODEL_BACKED,
     PLAN_ARTIFACT,
@@ -36,7 +42,9 @@ from .plan import build_focus_plan
 
 __all__ = [
     "EXTRACTORS",
+    "FOCUS_AREAS_ARTIFACT",
     "LEXICAL",
+    "MATCHERS",
     "MATCHES_ARTIFACT",
     "METHOD_NAME",
     "MODEL_BACKED",
@@ -44,14 +52,18 @@ __all__ = [
     "QualityGateError",
     "REQUIREMENTS_ARTIFACT",
     "WorkflowState",
+    "build_focus_areas",
     "build_focus_plan",
     "build_workflow",
+    "check_matches",
     "check_plan",
     "check_requirements",
+    "collect_match_errors",
     "collect_plan_errors",
     "collect_requirement_errors",
     "extract_requirements",
     "extract_requirements_with_model",
+    "match_evidence_with_model",
     "match_requirements",
     "normalize",
     "parse_extraction",

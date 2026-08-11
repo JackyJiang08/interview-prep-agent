@@ -13,9 +13,13 @@ from .config import Settings, load_settings
 from .corpus import load_evidence, load_job_description
 from .models import (
     Coverage,
+    CoverageLevel,
     EvidenceItem,
     EvidenceMatch,
+    FocusArea,
     FocusPlan,
+    MatchAssessment,
+    MatchAssessmentList,
     PlanItem,
     Requirement,
     RequirementCategory,
@@ -27,8 +31,11 @@ from .models import (
 from .providers import ProviderError, StructuredModel, build_model
 from .workflow import (
     QualityGateError,
+    build_focus_areas,
     build_focus_plan,
     build_workflow,
+    check_matches,
+    collect_match_errors,
     collect_requirement_errors,
     extract_requirements,
     extract_requirements_with_model,
@@ -41,9 +48,13 @@ __version__ = "0.3.0"
 
 __all__ = [
     "Coverage",
+    "CoverageLevel",
     "EvidenceItem",
     "EvidenceMatch",
+    "FocusArea",
     "FocusPlan",
+    "MatchAssessment",
+    "MatchAssessmentList",
     "PlanItem",
     "QualityGateError",
     "ProviderError",
@@ -58,6 +69,9 @@ __all__ = [
     "build_focus_plan",
     "build_model",
     "build_workflow",
+    "build_focus_areas",
+    "check_matches",
+    "collect_match_errors",
     "collect_requirement_errors",
     "extract_requirements",
     "extract_requirements_with_model",

@@ -15,7 +15,14 @@ from .config import load_settings
 from .corpus import CorpusError, load_evidence, load_job_description
 from .models import FocusPlan, Status
 from .providers import ProviderError, build_model
-from .workflow import EXTRACTORS, LEXICAL, MODEL_BACKED, QualityGateError, run_pipeline
+from .workflow import (
+    EXTRACTORS,
+    LEXICAL,
+    MATCHERS,
+    MODEL_BACKED,
+    QualityGateError,
+    run_pipeline,
+)
 
 PROGRAM_NAME = "interview-prep-agent"
 
@@ -49,6 +56,17 @@ def build_parser() -> argparse.ArgumentParser:
             "how requirements are read from the posting. 'lexical' splits on "
             "list markers and needs no credentials; 'llm' calls a provider and "
             "needs GEMINI_API_KEY (default: lexical)"
+        ),
+    )
+    match.add_argument(
+        "--matcher",
+        choices=MATCHERS,
+        default=LEXICAL,
+        help=(
+            "how requirements are scored against evidence. 'lexical' uses "
+            "IDF-weighted term overlap and needs no credentials; 'llm' asks a "
+            "provider for coverage judgments and needs GEMINI_API_KEY "
+            "(default: lexical)"
         ),
     )
     match.set_defaults(handler=run_match)
@@ -86,7 +104,8 @@ def run_match(args: argparse.Namespace) -> int:
         job_description = load_job_description(args.jd)
         evidence = load_evidence(args.evidence)
         settings = load_settings(args.config)
-        model = build_model() if args.extractor == MODEL_BACKED else None
+        needs_model = MODEL_BACKED in (args.extractor, args.matcher)
+        model = build_model() if needs_model else None
         plan = run_pipeline(
             job_description,
             evidence,
@@ -94,6 +113,7 @@ def run_match(args: argparse.Namespace) -> int:
             args.out,
             extractor=args.extractor,
             model=model,
+            matcher=args.matcher,
         )
     except (CorpusError, ProviderError, QualityGateError, OSError) as error:
         print(f"error: {error}", file=sys.stderr)
