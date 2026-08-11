@@ -15,13 +15,19 @@
         ]
       }
     ],
-    "method": "lexical-idf-v1"
+    "method": "lexical-idf-v1",
+    "coverage": "FULL",
+    "explanation": "Terms shared with EV-001: analysis, datasets, large, python, sql (score 1.00).",
+    "confidence": 1.0
   },
   {
     "requirement_id": "REQ-002",
     "status": "GAP",
     "matches": [],
-    "method": "lexical-idf-v1"
+    "method": "lexical-idf-v1",
+    "coverage": "GAP",
+    "explanation": "No supplied evidence reaches the match threshold.",
+    "confidence": 0.0
   },
   {
     "requirement_id": "REQ-003",
@@ -39,7 +45,10 @@
         ]
       }
     ],
-    "method": "lexical-idf-v1"
+    "method": "lexical-idf-v1",
+    "coverage": "FULL",
+    "explanation": "Terms shared with EV-002: cloud, data, etl, pipelines, warehouse (score 0.76).",
+    "confidence": 0.7587
   },
   {
     "requirement_id": "REQ-004",
@@ -59,18 +68,27 @@
         ]
       }
     ],
-    "method": "lexical-idf-v1"
+    "method": "lexical-idf-v1",
+    "coverage": "FULL",
+    "explanation": "Terms shared with EV-003: communicate, cross, engineering, findings, functional, partners, product (score 1.00).",
+    "confidence": 1.0
   },
   {
     "requirement_id": "REQ-005",
     "status": "GAP",
     "matches": [],
-    "method": "lexical-idf-v1"
+    "method": "lexical-idf-v1",
+    "coverage": "GAP",
+    "explanation": "No supplied evidence reaches the match threshold.",
+    "confidence": 0.0
   },
   {
     "requirement_id": "REQ-006",
     "status": "GAP",
     "matches": [],
-    "method": "lexical-idf-v1"
+    "method": "lexical-idf-v1",
+    "coverage": "GAP",
+    "explanation": "No supplied evidence reaches the match threshold.",
+    "confidence": 0.0
   }
 ]

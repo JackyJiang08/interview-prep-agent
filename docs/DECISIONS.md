@@ -63,6 +63,42 @@ alone no longer tells you a category is present. That is honest — the lexical
 path genuinely does not know the category — and it is the gate, not the type,
 that enforces completeness where completeness is required.
 
+## No fixture fallback on model failure
+
+When a model call fails — network, quota, or a response that fails validation —
+the run fails. It does not fall back to canned data, retry with a weaker
+schema, or degrade to the lexical path silently. The temptation is real: a
+fallback keeps demos smooth. But the gates exist to give one guarantee, that
+whatever comes out of a run was actually computed from the supplied inputs and
+checked against them. Output silently substituted from a fixture satisfies
+every structural check while being about nobody, which is worse than an error
+because it cannot be distinguished from a real result afterwards. A user who
+wants the offline behaviour chooses it explicitly with the lexical flags.
+
+## Coverage as three levels, mapped honestly per matcher
+
+Verdicts carry FULL, PARTIAL or GAP, with the old binary PROOF/GAP kept as the
+degenerate view (anything but a gap is proof). The lexical matcher never emits
+PARTIAL: term overlap can measure how much vocabulary the evidence attests but
+cannot recognise that the unattested part is an important *dimension* — that
+takes reading, so claiming PARTIAL from a middling score would dress ignorance
+up as judgment. Only the model path, which reads, may say PARTIAL, and both
+paths pass the same deterministic guard: a gap cites nothing, anything else
+cites at least one real evidence item, every requirement is judged exactly
+once, in order.
+
+## Focus priority as importance times coverage weight
+
+Preparation order is computed, not judged: requirement importance (1–5)
+multiplied by a coverage weight (FULL 1, PARTIAL 2, GAP 3), descending, ties in
+source order. A gap on a critical requirement lands first; a covered
+nice-to-have lands last. When importance is absent — the lexical extractor
+cannot supply one — the neutral weight 1 is used, and the ordering degrades to
+exactly the old gap-first rule, which is what keeps the committed artifacts
+byte-stable under the upgrade. The weights are a modelling choice, not a
+measurement; they are three small integers precisely so that nobody mistakes
+them for one.
+
 ## Lexical scoring before semantic scoring
 
 The matcher weights terms by inverse document frequency and scores the share of

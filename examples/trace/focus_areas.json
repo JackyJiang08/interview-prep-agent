@@ -1,0 +1,44 @@
+[
+  {
+    "requirement_id": "REQ-002",
+    "coverage": "GAP",
+    "priority": 3,
+    "preparation_action": "Prepare an honest gap response and a concrete learning plan.",
+    "reason": "No supplied evidence reaches the match threshold."
+  },
+  {
+    "requirement_id": "REQ-005",
+    "coverage": "GAP",
+    "priority": 3,
+    "preparation_action": "Prepare an honest gap response and a concrete learning plan.",
+    "reason": "No supplied evidence reaches the match threshold."
+  },
+  {
+    "requirement_id": "REQ-006",
+    "coverage": "GAP",
+    "priority": 3,
+    "preparation_action": "Prepare an honest gap response and a concrete learning plan.",
+    "reason": "No supplied evidence reaches the match threshold."
+  },
+  {
+    "requirement_id": "REQ-001",
+    "coverage": "FULL",
+    "priority": 1,
+    "preparation_action": "Prepare a concise story that proves this strength.",
+    "reason": "Terms shared with EV-001: analysis, datasets, large, python, sql (score 1.00)."
+  },
+  {
+    "requirement_id": "REQ-003",
+    "coverage": "FULL",
+    "priority": 1,
+    "preparation_action": "Prepare a concise story that proves this strength.",
+    "reason": "Terms shared with EV-002: cloud, data, etl, pipelines, warehouse (score 0.76)."
+  },
+  {
+    "requirement_id": "REQ-004",
+    "coverage": "FULL",
+    "priority": 1,
+    "preparation_action": "Prepare a concise story that proves this strength.",
+    "reason": "Terms shared with EV-003: communicate, cross, engineering, findings, functional, partners, product (score 1.00)."
+  }
+]
