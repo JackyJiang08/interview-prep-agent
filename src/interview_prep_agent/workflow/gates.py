@@ -18,7 +18,16 @@ import re
 from collections import Counter
 from collections.abc import Sequence
 
-from ..models import CoverageLevel, EvidenceItem, Requirement, RequirementMatch, Status
+from ..models import (
+    CoverageLevel,
+    EvidenceItem,
+    FocusArea,
+    InterviewStrategy,
+    MockQuestion,
+    Requirement,
+    RequirementMatch,
+    Status,
+)
 
 _WHITESPACE = re.compile(r"\s+")
 
@@ -236,5 +245,236 @@ def check_plan(
         QualityGateError: With every failure listed, not just the first.
     """
     errors = collect_plan_errors(requirements, verdicts, evidence)
+    if errors:
+        raise QualityGateError("; ".join(errors))
+
+
+def _reference_errors(
+    section: str,
+    items,
+    requirement_ids: set[str],
+    evidence_by_requirement: dict[str, tuple[CoverageLevel, set[str]]],
+) -> list[str]:
+    """Shared checks for anything downstream that cites identifiers.
+
+    Every item must name a known requirement; an item for a GAP requirement
+    must cite no evidence; anything else must cite at least one identifier,
+    all of them drawn from the evidence matched to that requirement.
+    """
+    errors: list[str] = []
+    for item in items:
+        label = f"{section} for {item.requirement_id}"
+        if item.requirement_id not in requirement_ids:
+            errors.append(
+                f"traceability: {section} references unknown requirement {item.requirement_id}"
+            )
+            continue
+
+        if not hasattr(item, "evidence_ids"):
+            continue
+        coverage, matched = evidence_by_requirement[item.requirement_id]
+        cited = set(item.evidence_ids)
+        if coverage is CoverageLevel.GAP:
+            if cited:
+                errors.append(f"grounding: {label} must not cite evidence for a gap")
+            continue
+        if not cited:
+            errors.append(f"grounding: {label} must retain at least one matched evidence id")
+            continue
+        stray = sorted(cited - matched)
+        if stray:
+            errors.append(
+                f"traceability: {label} cites evidence not matched to the "
+                f"requirement: {', '.join(stray)}"
+            )
+    return errors
+
+
+def _evidence_by_requirement(
+    verdicts: Sequence[RequirementMatch],
+) -> dict[str, tuple[CoverageLevel, set[str]]]:
+    table: dict[str, tuple[CoverageLevel, set[str]]] = {}
+    for verdict in verdicts:
+        coverage = verdict.coverage or (
+            CoverageLevel.GAP if verdict.status is Status.GAP else CoverageLevel.FULL
+        )
+        table[verdict.requirement_id] = (
+            coverage,
+            {match.evidence_id for match in verdict.matches},
+        )
+    return table
+
+
+def collect_strategy_errors(
+    requirements: Sequence[Requirement],
+    verdicts: Sequence[RequirementMatch],
+    focus_areas: Sequence[FocusArea],
+    strategy: InterviewStrategy,
+) -> list[str]:
+    """Check the strategy against the state it was composed from.
+
+    References must resolve, evidence links must stay inside each
+    requirement's matched evidence, and every focus area at GAP coverage must
+    appear in the risks — a gap left out of the risks is a gap the candidate
+    walks into unprepared.
+    """
+    requirement_ids = {item.id for item in requirements}
+    table = _evidence_by_requirement(verdicts)
+
+    errors = _reference_errors("strategy item", strategy.top_priorities, requirement_ids, table)
+    errors += _reference_errors("story plan", strategy.stories_to_prepare, requirement_ids, table)
+    errors += _reference_errors("risk", strategy.risks_to_address, requirement_ids, table)
+
+    risk_ids = {item.requirement_id for item in strategy.risks_to_address}
+    for area in focus_areas:
+        if area.coverage is CoverageLevel.GAP and area.requirement_id not in risk_ids:
+            errors.append(
+                f"coverage: gap focus area {area.requirement_id} "
+                "does not appear in risks_to_address"
+            )
+    return errors
+
+
+def check_strategy(
+    requirements: Sequence[Requirement],
+    verdicts: Sequence[RequirementMatch],
+    focus_areas: Sequence[FocusArea],
+    strategy: InterviewStrategy,
+) -> None:
+    """Raise if the strategy fails any check.
+
+    Raises:
+        QualityGateError: With every failure listed, not just the first.
+    """
+    errors = collect_strategy_errors(requirements, verdicts, focus_areas, strategy)
+    if errors:
+        raise QualityGateError("; ".join(errors))
+
+
+def collect_question_errors(
+    requirements: Sequence[Requirement],
+    verdicts: Sequence[RequirementMatch],
+    questions: Sequence[MockQuestion],
+    min_questions: int = 8,
+) -> list[str]:
+    """Check the question set against the state it was generated from."""
+    errors: list[str] = []
+    if len(questions) < min_questions:
+        errors.append(
+            f"coverage: expected at least {min_questions} practice questions, "
+            f"received {len(questions)}"
+        )
+    requirement_ids = {item.id for item in requirements}
+    errors += _reference_errors(
+        "question", questions, requirement_ids, _evidence_by_requirement(verdicts)
+    )
+    return errors
+
+
+def check_questions(
+    requirements: Sequence[Requirement],
+    verdicts: Sequence[RequirementMatch],
+    questions: Sequence[MockQuestion],
+    min_questions: int = 8,
+) -> None:
+    """Raise if the question set fails any check.
+
+    Raises:
+        QualityGateError: With every failure listed, not just the first.
+    """
+    errors = collect_question_errors(requirements, verdicts, questions, min_questions)
+    if errors:
+        raise QualityGateError("; ".join(errors))
+
+
+def collect_package_errors(
+    job_description: str,
+    evidence: Sequence[EvidenceItem],
+    requirements: Sequence[Requirement],
+    verdicts: Sequence[RequirementMatch],
+    focus_areas: Sequence[FocusArea],
+    strategy: InterviewStrategy | None,
+    questions: Sequence[MockQuestion],
+    min_questions: int = 8,
+) -> list[str]:
+    """Run the full deterministic invariant set over a candidate package.
+
+    Composes every stage gate and adds the package-level invariants: all
+    sections present, one focus area per requirement with coverage agreeing
+    with the verdict, and the identifier chain resolving end to end through
+    strategy and questions.
+    """
+    errors: list[str] = []
+
+    if not requirements:
+        errors.append("coverage: the package has no requirements")
+    if not evidence:
+        errors.append("coverage: the package has no evidence")
+    if strategy is None:
+        errors.append("coverage: the package has no strategy")
+
+    errors += collect_requirement_errors(job_description, requirements)
+    errors += collect_match_errors(requirements, verdicts, evidence)
+
+    for verdict in verdicts:
+        if verdict.coverage is None:
+            errors.append(f"coverage: {verdict.requirement_id} carries no explicit coverage level")
+
+    requirement_ids = [item.id for item in requirements]
+    focus_ids = [area.requirement_id for area in focus_areas]
+    focus_counts = Counter(focus_ids)
+    for identifier in sorted(set(requirement_ids) - set(focus_ids)):
+        errors.append(f"coverage: no focus area for {identifier}")
+    for identifier, count in sorted(focus_counts.items()):
+        if count > 1:
+            errors.append(f"identity: duplicate focus area for {identifier}")
+        if identifier not in set(requirement_ids):
+            errors.append(f"traceability: focus area references unknown requirement {identifier}")
+
+    verdict_by_id = {verdict.requirement_id: verdict for verdict in verdicts}
+    for area in focus_areas:
+        verdict = verdict_by_id.get(area.requirement_id)
+        if (
+            verdict is not None
+            and verdict.coverage is not None
+            and area.coverage is not verdict.coverage
+        ):
+            errors.append(
+                f"identity: focus area {area.requirement_id} coverage "
+                "disagrees with the match verdict"
+            )
+
+    if strategy is not None:
+        errors += collect_strategy_errors(requirements, verdicts, focus_areas, strategy)
+    errors += collect_question_errors(requirements, verdicts, questions, min_questions)
+
+    return errors
+
+
+def check_package(
+    job_description: str,
+    evidence: Sequence[EvidenceItem],
+    requirements: Sequence[Requirement],
+    verdicts: Sequence[RequirementMatch],
+    focus_areas: Sequence[FocusArea],
+    strategy: InterviewStrategy | None,
+    questions: Sequence[MockQuestion],
+    min_questions: int = 8,
+) -> None:
+    """Raise if the package fails any invariant.
+
+    Raises:
+        QualityGateError: With every failure listed, not just the first.
+    """
+    errors = collect_package_errors(
+        job_description,
+        evidence,
+        requirements,
+        verdicts,
+        focus_areas,
+        strategy,
+        questions,
+        min_questions,
+    )
     if errors:
         raise QualityGateError("; ".join(errors))
