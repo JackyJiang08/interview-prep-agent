@@ -16,12 +16,14 @@ from collections.abc import Sequence
 from ..models import (
     Coverage,
     EvidenceItem,
+    FocusArea,
     FocusPlan,
     PlanItem,
     Requirement,
     RequirementMatch,
     Status,
 )
+from .assess import build_focus_areas
 from .gates import QualityGateError, check_plan
 from .match import METHOD_NAME
 
@@ -37,16 +39,24 @@ def build_focus_plan(
     requirements: Sequence[Requirement],
     verdicts: Sequence[RequirementMatch],
     evidence: Sequence[EvidenceItem],
+    focus_areas: Sequence[FocusArea] | None = None,
 ) -> FocusPlan:
-    """Combine stage outputs into the final gap-first plan.
+    """Combine stage outputs into the final plan, ordered by focus priority.
 
-    Gaps sort ahead of proven requirements; within each group the source order
-    of the posting is preserved so the plan stays readable against the original.
+    The plan is a view over the focus areas: items follow their
+    importance-weighted, coverage-aware order, computed here when the caller
+    has not already done so. Without importance data this reduces to exactly
+    the old rule — gaps ahead of proven requirements, source order within each
+    group — so the committed artifacts are unchanged by the upgrade.
 
     Raises:
         QualityGateError: If coverage or traceability is violated.
     """
     check_plan(requirements, verdicts, evidence)
+
+    if focus_areas is None:
+        focus_areas = build_focus_areas(requirements, verdicts)
+    position = {area.requirement_id: index for index, area in enumerate(focus_areas)}
 
     by_id = {verdict.requirement_id: verdict for verdict in verdicts}
     items: list[PlanItem] = []
@@ -61,7 +71,7 @@ def build_focus_plan(
             )
         )
 
-    items.sort(key=lambda item: (item.status is Status.PROOF,))
+    items.sort(key=lambda item: position[item.requirement.id])
 
     gap_count = sum(1 for item in items if item.status is Status.GAP)
     return FocusPlan(
@@ -71,7 +81,7 @@ def build_focus_plan(
             gap=gap_count,
         ),
         items=items,
-        method=METHOD_NAME,
+        method=verdicts[0].method if verdicts else METHOD_NAME,
     )
 
 
