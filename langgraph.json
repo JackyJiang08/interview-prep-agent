@@ -1,0 +1,8 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "match": "./src/interview_prep_agent/workflow/graph.py:graph",
+    "prep": "./src/interview_prep_agent/workflow/graph.py:prep_graph"
+  },
+  "env": ".env"
+}

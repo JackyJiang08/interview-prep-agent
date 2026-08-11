@@ -3,6 +3,10 @@
 Every tunable lives in a config file, never in the code. Resolution order is
 explicit argument, then the ``IPA_CONFIG`` environment variable, then the
 packaged default. No path in this module is absolute.
+
+A ``.env`` file in the working directory is loaded before the environment is
+read, so credentials and tracing switches have one documented home. Values
+already present in the environment win over the file.
 """
 
 from __future__ import annotations
@@ -11,6 +15,7 @@ import os
 from pathlib import Path
 
 import yaml
+from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[2] / "configs" / "default.yaml"
@@ -44,6 +49,8 @@ def load_settings(path: Path | None = None) -> Settings:
     Returns:
         Validated settings. Defaults apply when the file is absent or empty.
     """
+    # Existing environment variables take precedence over the file.
+    load_dotenv(override=False)
     resolved = path or _from_environment() or DEFAULT_CONFIG_PATH
     if not Path(resolved).is_file():
         return Settings()

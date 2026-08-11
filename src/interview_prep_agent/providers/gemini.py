@@ -14,7 +14,21 @@ from .base import ProviderError, StructuredModel
 ENV_API_KEY = "GEMINI_API_KEY"
 ENV_MODEL = "GEMINI_MODEL"
 
+ENV_TRACING = "LANGSMITH_TRACING"
+ENV_TRACING_KEY = "LANGSMITH_API_KEY"
+
 DEFAULT_MODEL = "gemini-3.5-flash-lite"
+
+
+def _tracing_enabled() -> bool:
+    """True only when tracing is explicitly switched on and a key is present.
+
+    Off is the default, and off means zero overhead and zero network: no
+    wrapper is constructed and nothing is imported.
+    """
+    return os.environ.get(ENV_TRACING, "").strip().lower() == "true" and bool(
+        os.environ.get(ENV_TRACING_KEY)
+    )
 
 
 class GeminiModel(StructuredModel):
@@ -47,6 +61,20 @@ class GeminiModel(StructuredModel):
 
         self._model = model or os.environ.get(ENV_MODEL) or DEFAULT_MODEL
         self._client = genai.Client(api_key=resolved_key)
+
+        if _tracing_enabled():
+            # Opt-in observability, wrapped at the seam so no stage knows
+            # about it. Traced runs upload prompts and responses to the
+            # tracing service; the sample data stays synthetic for a reason.
+            try:
+                from langsmith import wrappers
+            except ImportError as error:
+                raise ProviderError(
+                    f"{ENV_TRACING} is enabled but langsmith is not "
+                    "installed; run 'pip install -r requirements-dev.txt' "
+                    "or unset the variable."
+                ) from error
+            self._client = wrappers.wrap_gemini(self._client)
 
     @property
     def name(self) -> str:

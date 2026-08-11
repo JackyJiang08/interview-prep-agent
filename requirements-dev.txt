@@ -3,3 +3,8 @@
 -r requirements.txt
 pytest==8.4.1
 ruff==0.16.1
+# Optional tooling: tracing wrapper used only when LANGSMITH_TRACING=true,
+# and the local graph viewer behind 'langgraph dev'. Neither is imported on
+# the default offline paths.
+langsmith==0.10.16
+langgraph-cli==0.4.31
