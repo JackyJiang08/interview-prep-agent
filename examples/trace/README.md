@@ -7,13 +7,20 @@ stage boundaries can be read without installing anything.
 | File | Stage | What it shows |
 |---|---|---|
 | `requirements.json` | 1 — extraction | Each requirement with the posting's exact wording, its normalized comparison form, the `source_quote` that grounds it in the posting, and the source line it came from. |
-| `matches.json` | 2 — scoring | One verdict per requirement, with the evidence cited, the score, and the overlapping terms that produced it. |
-| `focus_plan.json` | 3 — assembly | The final gap-first plan and the coverage totals. |
+| `matches.json` | 2 — matching | One verdict per requirement: the evidence cited with its score and overlapping terms, the coverage level (`FULL`/`GAP` on this lexical run — the lexical matcher never claims `PARTIAL`), an explanation, and a confidence. |
+| `focus_areas.json` | 2b — assessment | Every requirement ranked by `importance × coverage weight`, with the fixed preparation action for its coverage level and the matcher's explanation as the reason. |
+| `focus_plan.json` | 3 — assembly | The final plan in focus-area order and the coverage totals. |
 
-This run used the default lexical extractor, so each `source_quote` equals the
-extracted text and fields only the model-backed path can supply (category,
-importance, requirement type) are absent — the artifacts omit unset fields
-rather than writing null.
+This run used the default lexical extractor and matcher, so each
+`source_quote` equals the extracted text, fields only the model-backed paths
+can supply (category, importance, requirement type) are absent — the artifacts
+omit unset fields rather than writing null — and with no importance data the
+focus ordering reduces to gaps first in source order.
+
+A `prep` run writes three further artifacts — `strategy.json`,
+`questions.json`, and `prep_package.json` when the package gate passes — but
+those stages call a provider, so no committed run exists: a committed artifact
+must be a deterministic function of the repo, and a model response is not.
 
 Reading them in order is the argument for the design: a wrong verdict in
 `focus_plan.json` can be traced back to a specific score in `matches.json`, and
