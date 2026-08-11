@@ -45,37 +45,41 @@ output at all.
 
 ## Layer 1 — deterministic workflow · shipped
 
-**Owns** extraction of requirements from a posting, scoring them against an
-evidence corpus, and assembling a gap-first plan. Enforces the coverage,
-traceability and grounding gates. Runs on a state graph: extract, validate,
-then either match and plan, or report the validation errors and stop.
+**Owns** the full fixed path from source documents to a validated preparation
+package: input validation, evidence normalization, requirement extraction,
+coverage matching, deterministic gap assessment, strategy and question
+composition, and a package gate whose outcome routes the run into assembly or
+an error report. Enforces every deterministic guarantee — grounding, match
+consistency, and the end-to-end identifier chain.
 
-Extraction has two implementations behind one contract — a lexical splitter for
-list-formatted postings, and a model-backed path for prose, reached through a
-provider seam so no stage touches a vendor SDK. Both emit the same
-`Requirement` model, both record the source span that justifies each
-requirement, and both face the same grounding gate. The model is used to read;
-the gate decides what was really there.
+Four stages are model-backed — extraction, matching, strategy, questions —
+and all four sit behind one provider seam, so no stage touches a vendor SDK.
+Each model produces data against a requested schema; every judgment about that
+data belongs to gate code. The extraction paths share one grounding gate, the
+matcher paths share one match gate, and the composed layers are judged once,
+by the package gate. The models are used to read and to write; the gates
+decide what was really there.
 
-**Why fixed.** Extraction always precedes matching, matching always precedes
-assembly, and the one fork — invalid extraction routes to an error report — is
-taken by a pure predicate over a boolean that gate code computed, with both
-targets wired when the graph is built. Nothing chooses at run time, so a run is
-still reproducible from its inputs; the model-backed extractor is the one
-nondeterministic element, and what it produces is data that must survive
-validation, never a routing choice.
+**Why still fixed.** Every stage runs in the same order on every invocation,
+and both forks — invalid extraction on the short graph, a failed package gate
+on the full one — are taken by pure predicates over booleans that gate code
+computed, with all targets wired when the graphs are built. Nothing chooses at
+run time. The model-backed stages are the nondeterministic elements, and what
+they produce is data that must survive validation, never a routing choice; no
+model approves its own output.
 
 **Boundary.** Everything crosses it as a validated model in `models.py`:
-`Requirement`, `EvidenceItem`, `RequirementMatch`, `FocusPlan`. These are the
-contract the whole system shares, which is why they sit at package root rather
-than inside `workflow/`. Higher layers depend on the contract, not on the
-implementation behind it.
+`Requirement`, `EvidenceItem`, `RequirementMatch`, `FocusArea`,
+`InterviewStrategy`, `MockQuestion`, `PrepPackage`. These are the contract the
+whole system shares, which is why they sit at package root rather than inside
+`workflow/`. Higher layers depend on the contract, not on the implementation
+behind it.
 
-**Open inside this layer.** Lexical matching is the dominant error source; a
-semantic scorer belongs behind the existing matcher seam. The match threshold
-needs calibrating against real data rather than one synthetic example. And the
-model-backed extractor's judgment — whether it finds the right requirements,
-not merely grounded ones — is unmeasured until the evaluation set exists.
+**Open inside this layer.** The lexical matcher's false gaps remain its
+dominant error, and the model matcher that exists to close them is itself
+unmeasured — as are model extraction, the strategy, and the questions. The
+match threshold needs calibrating against real data rather than one synthetic
+example. All of it waits on the evaluation set.
 
 ## Layer 2 — bounded decision layer · next
 
@@ -116,12 +120,13 @@ bottom and every layer above inherits it unchanged.
 * an evaluation set exists showing the loop does not degrade what Layer 1
   already produces correctly
 
-One precondition that used to be implicit is now met: the workflow already runs
-on a graph with typed state and a validation branch, so this layer arrives as
-new nodes and edges on an existing structure — the provider seam it would call
-through, and the validate-then-route pattern it would extend, are in place. The
-three criteria above are unchanged; none of them is satisfied by the runtime
-alone.
+The runtime precondition is met and the full workflow now runs on it: typed
+state, the provider seam, and the validate-then-route pattern all carry the
+complete package path, so this layer arrives as new nodes and edges on a
+structure that already does real work. Nothing else has changed: the three
+criteria above stand, and none of them is satisfied by the runtime alone — the
+loop still needs a real tool with a defined failure mode, trajectory-level
+traces, and the evaluation set.
 
 ## Layer 3 — durable state · planned
 

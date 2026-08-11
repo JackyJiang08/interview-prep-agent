@@ -75,6 +75,31 @@ every structural check while being about nobody, which is worse than an error
 because it cannot be distinguished from a real result afterwards. A user who
 wants the offline behaviour chooses it explicitly with the lexical flags.
 
+## Tracing lives inside the seam, off by default
+
+Optional observability is wired at exactly one place: the provider
+implementation, behind two environment variables that must both be set before
+anything is wrapped. Off means no wrapper, no upload, and no network beyond
+the model call itself; no stage, node or gate knows tracing exists. The
+alternative — instrumenting nodes directly — would spread an operational
+concern through business logic and make "zero overhead when off" a claim about
+many files instead of one. The cost is coarser traces than per-node
+instrumentation could give; that is the observability layer's job, later, done
+deliberately. Traced runs upload prompts and responses to the tracing service,
+which is why the example environment file says to use synthetic data.
+
+## YAML stays the canonical evidence input
+
+A markdown resume is accepted and its bullets normalize into the same evidence
+model, but the YAML corpus remains the canonical form. A corpus entry is
+written *as evidence* — one attested claim, its skills, its impact — while a
+resume bullet is written to impress and must be reinterpreted, so the corpus
+is the higher-fidelity input and the resume reader is a convenience ramp, not
+a replacement. Identifiers are minted once, at the boundary, in either route;
+nothing downstream mints one. The cost of the ramp is that a badly formatted
+resume yields fragmented evidence — visible in the artifacts rather than
+hidden, which is the most that can be claimed for it.
+
 ## Coverage as three levels, mapped honestly per matcher
 
 Verdicts carry FULL, PARTIAL or GAP, with the old binary PROOF/GAP kept as the

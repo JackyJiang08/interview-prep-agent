@@ -19,14 +19,16 @@ boundaries does not make the model smarter; it makes the error attributable.
 
 ## Design
 
-Control flow is fixed in code and runs on a state graph. Every invocation
-follows the same shape: extract, validate the extraction, then either match and
-plan, or report the validation errors and stop. This is a workflow in the sense
-of Anthropic's taxonomy [3] — the path is predetermined, not chosen at runtime.
-The one conditional edge does not change that: both targets are wired when the
-graph is built, and the routing predicate is a pure function of a boolean that
-deterministic gate code computed. A model, when one is used, produces data that
-is then validated; it never chooses the next node.
+Control flow is fixed in code and runs on state graphs — a short one behind
+`match` (extract, validate, then match and plan or report errors) and the full
+one behind `prep` (inputs, evidence, extraction, matching, assessment,
+strategy, questions, then package validation into assembly or an error
+report). Both are workflows in the sense of Anthropic's taxonomy [3] — the
+path is predetermined, not chosen at runtime. The conditional edges do not
+change that: every branch target is wired when the graph is built, and each
+routing predicate is a pure function of a boolean that deterministic gate code
+computed. A model, where one is used, produces data that is then validated; it
+never chooses the next node, and it never approves its own output.
 
 ### Stage 1 - extraction
 
@@ -81,12 +83,26 @@ The model call itself sits behind a provider seam: stages depend on an abstract
 contract (prompt and JSON schema in, parsed response out), and the first
 implementation is Gemini. No stage imports a vendor SDK.
 
-### Stage 2 - scoring
+### Stage 2 - matching
 
 Input is the requirements and the evidence corpus; output is one verdict per
-requirement.
+requirement, graded on a three-level coverage scale:
 
-Terms are lowercased and tokenized, dropping stopwords and single characters.
+* **FULL** — supplied evidence directly supports every important part of the
+  requirement.
+* **PARTIAL** — related supplied evidence exists but misses an important
+  dimension.
+* **GAP** — no supplied evidence supports the requirement. A gap is a correct
+  and useful answer, kept visible rather than papered over.
+
+The older binary status survives as the degenerate view: anything but a gap is
+proof. Two matcher implementations produce the same verdict model, and both
+face the same deterministic match gate — every requirement judged exactly
+once, in order; every citation resolving; a gap citing nothing; anything else
+citing at least one item.
+
+**Lexical path** (`--matcher lexical`, the default). Terms are lowercased and
+tokenized, dropping stopwords and single characters.
 Compound terms are kept whole *and* split, so `SQL/Python` contributes
 `sql/python`, `sql` and `python`, while `A/B` survives as a term its
 one-character parts could not represent.
@@ -111,8 +127,14 @@ weighted terms that `e` attests:
 
 This lands in [0, 1] and reads directly as "how much of this requirement is
 actually backed up". A requirement scoring at or above `match_threshold`
-(default 0.30) against at least one item is `PROOF`; otherwise `GAP`. Every match
-reports the overlapping terms that produced it.
+(default 0.30) against at least one item is `FULL`; otherwise `GAP`. The
+lexical path never emits `PARTIAL`, and the restraint is deliberate: term
+overlap can measure how much of a requirement's vocabulary the evidence
+attests, but it cannot recognise that the unattested part is an important
+*dimension* — that takes reading. Claiming `PARTIAL` from a middling score
+would dress that ignorance up as a judgment. Confidence is the top evidence
+score, unchanged, and every match reports the overlapping terms that produced
+it.
 
 This is deliberately not BM25 [2]. BM25's saturation and length-normalization
 terms are tuned for ranking documents by relevance to a short query; here the
@@ -121,27 +143,62 @@ dozen short items rather than a large collection. The simpler formula is also
 readable off the output, which matters more at this stage than ranking quality.
 
 The honest limitation: this is lexical matching. It scores "designed randomized
-experiments" against "A/B testing" at zero, because they share no terms. That is
-a false gap, and it is the single largest source of error in the current
-baseline. Denser matching is the first roadmap item.
+experiments" against "A/B testing" at zero, because they share no terms. That
+is a false gap, and it is the dominant error of this path.
 
-### Stage 3 - planning and gates
+**Model-backed path** (`--matcher llm`). One structured-output call through the
+provider seam: requirements and evidence in, one assessment per requirement out
+— coverage, cited evidence identifiers, an explanation, and a confidence in
+[0, 1]. Because this path reads, it may say `PARTIAL` and name the missing
+dimension. The prompt states that only supplied identifiers may be referenced,
+that missing support must be returned as `GAP`, and that invention is the
+failure mode; the response is schema-validated, converted to the same verdict
+model, and held to the same match gate as the lexical path. Whether its
+judgments are *right* is unmeasured — the gate proves its citations are real,
+not that its reading is good — so neither path can honestly be called better
+until the evaluation set exists.
 
-Verdicts are assembled into a plan ordered gaps-first, preserving source order
-within each group. Three checks run before the plan is returned, and each raises
-rather than degrading quietly:
+### Stages 3-5 - assessment, strategy, questions
 
-* **Coverage** — the set of requirement identifiers going in equals the set
-  coming out. Catches a requirement dropped or invented between stages.
-* **Traceability** — every cited evidence identifier exists in the corpus, and
-  nothing is marked `PROOF` without at least one citation.
-* **Grounding** — displayed text is carried by reference from the extraction
-  stage, so it cannot drift. `tests/test_extract.py` asserts every extracted
-  requirement appears verbatim in the source.
+**Gap assessment** is deterministic arithmetic, not judgment. Each requirement
+becomes a focus area with
 
-These are cheap assertions, not a guarantee of correctness. They catch structural
-breakage between stages. They cannot catch a match that is structurally valid and
-semantically wrong — only a threshold change or a better matcher does that.
+    focus_priority = importance × coverage_weight   (FULL 1, PARTIAL 2, GAP 3)
+
+sorted descending, ties in source order, so a gap on a critical requirement
+lands first and a covered nice-to-have lands last. The action is fixed per
+coverage level and the reason carries the matcher's explanation. When a
+requirement has no importance — the lexical extractor cannot supply one — the
+neutral weight 1 is used and the ordering degrades to coverage alone, which is
+exactly the older gap-first rule.
+
+**Strategy and questions** are the two remaining model stages, both through
+the same seam: a strategy (priorities, positioning, stories, risks) composed
+from the focus areas, then eight to twelve practice questions grounded in it.
+Each response is schema-validated; every deterministic judgment about it
+belongs to the gates.
+
+### The package gate
+
+Before a package is assembled, one collected invariant set runs end to end,
+and its outcome routes the graph — a valid run assembles the package, an
+invalid one ends with its errors listed and no package artifact:
+
+* every section present — evidence, requirements, matches, focus areas,
+  strategy, and at least eight questions
+* the extraction and match gates re-checked over the final state
+* every requirement carrying an explicit coverage level, with exactly one
+  focus area agreeing with it
+* every downstream reference — strategy item, story, risk, question —
+  resolving to a real requirement, citing only evidence already matched to
+  that requirement, and citing nothing when the requirement is a gap
+* every gap focus area appearing in the risks, because a gap left out of the
+  risks is a gap the candidate walks into unprepared
+
+These are cheap assertions, not a guarantee of correctness. They catch
+structural breakage and broken reference chains. They cannot catch output that
+is structurally valid and semantically wrong — only the evaluation set does
+that.
 
 ## Evaluation
 
