@@ -34,8 +34,8 @@ class GeminiModel(StructuredModel):
         resolved_key = api_key or os.environ.get(ENV_API_KEY)
         if not resolved_key:
             raise ProviderError(
-                f"{ENV_API_KEY} is not set. Export a key, or run with "
-                "--extractor lexical, which needs no credentials."
+                f"{ENV_API_KEY} is not set. Export a key, or use the lexical "
+                "extractor and matcher, which need no credentials."
             )
 
         try:
