@@ -15,7 +15,7 @@ from pathlib import Path
 import yaml
 from pydantic import ValidationError
 
-from .models import EvidenceItem
+from .models import Clarification, EvidenceItem
 
 
 class CorpusError(ValueError):
@@ -126,3 +126,25 @@ def parse_evidence_markdown(markdown: str) -> list[EvidenceItem]:
     if not items:
         raise CorpusError("the resume contains no bullet lines to normalize into evidence")
     return items
+
+
+def clarification_to_evidence(clarification: Clarification, index: int) -> EvidenceItem:
+    """Normalize one human answer into a first-class evidence item.
+
+    Identifiers run in their own ``CL-`` series so a citation is legible about
+    where the evidence came from, and the item carries the requirement it
+    addresses and the question that was asked. Regeneration passes the
+    enlarged corpus through the unchanged workflow, so a match citing a
+    clarification cites an identifier that resolves like any other.
+
+    Args:
+        clarification: The answered question.
+        index: One-based position in the clarification series.
+    """
+    return EvidenceItem(
+        id=f"CL-{index:03d}",
+        summary=clarification.answer,
+        source="clarification",
+        addresses_requirement_id=clarification.requirement_id,
+        question=clarification.question,
+    )
