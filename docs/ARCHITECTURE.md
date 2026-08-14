@@ -81,52 +81,60 @@ unmeasured — as are model extraction, the strategy, and the questions. The
 match threshold needs calibrating against real data rather than one synthetic
 example. All of it waits on the evaluation set.
 
-## Layer 2 — bounded decision layer · next
+## Layer 2 — bounded decision layer · shipped, unevaluated
 
-**Owns** the choice of what to do when the fixed path runs out. Three points in
-this system produce genuine decisions:
+**Owns** the choice of what to do when the fixed path runs out. The decision
+this repo's data actually produces is the first of the three anticipated —
+missing evidence: the corpus is thin on a high-importance requirement, asking
+the candidate is cheap and high value, but asking about everything is
+worthless, so *which* gap to raise depends on what the run currently looks
+like. That decision is now real and the loop is built around it.
 
-1. **Missing evidence.** The corpus is thin on a requirement. Asking the
-   candidate is cheap and high value, but asking about everything is worthless —
-   which gap to raise depends on what the plan currently looks like.
-2. **Tool results.** A research call can return something useful, something
-   irrelevant, or nothing at all. What to do next depends on which happened, and
-   that is not knowable in advance. Handling failure honestly matters more than
-   handling success: a tool that returns nothing must produce a recorded absence,
-   never a plausible invention.
-3. **Feedback after the fact.** An interview reveals which answers were weak.
-   Which part of the plan that invalidates depends on the content of the
-   feedback.
+**Mechanics, as built.** The loop is observe → decide → authorize, with every
+branch target fixed at build time:
 
-**Shape.** A small closed set of actions, each with a declared effect on state;
-a step limit that terminates the loop regardless; a recorded reason for every
-action taken. Closed rather than open-ended because an action set that can grow
-at run time cannot be tested, and the point of bounding it is that the set of
-things that can go wrong stays enumerable.
+* **Observation compression.** Pure code derives a factual snapshot — package
+  state, high-priority gaps (GAP coverage, importance ≥ 4, sorted), what has
+  been asked, budget remaining — and the *allowed* action set. The model sees
+  this snapshot and nothing else.
+* **Proposal.** One structured-output call returns exactly one action from
+  `ASK_USER | GENERATE_PREP_PACKAGE | FINISH` with a one-sentence reason.
+  Only the validated decision enters state; that proposal is the model's
+  entire authority.
+* **Authorization.** Code applies every gate — action budget, allowed set,
+  ask eligibility and non-repetition, the question ceiling, finish
+  preconditions — and computes the route the conditional edge maps. An
+  invalid proposal is retried once with the rejection fed back, then the run
+  stops with `invalid_decision`; an exhausted budget stops without retry
+  (`action_budget_exhausted`), because a retry cannot refill it; a completed
+  run stops with `valid_package_complete`.
+* **The human capability.** `ASK_USER` interrupts with the requirement and
+  one focused factual question. The answer is minted as a first-class `CL-`
+  evidence item and regeneration passes the enlarged corpus through the
+  unchanged workflow, so the traceability guarantee survives the human in
+  the loop. Budgets — actions and questions — are settings enforced by
+  authorization, not suggestions in a prompt.
 
-**Boundary.** Reads a `FocusPlan` and the evidence corpus; may re-run Layer 1
-stages; emits an updated plan plus a trajectory record. The hard constraint: it
-may add evidence and revise commentary, but it may not rewrite the verbatim
-requirement text carried up from extraction. Grounding is established at the
-bottom and every layer above inherits it unchanged.
+**Boundary.** The hard constraint holds: the loop may add evidence and
+regenerate, but it may not rewrite the verbatim requirement text carried up
+from extraction. Grounding is established at the bottom and every layer above
+inherits it unchanged.
 
-**Ships when:**
+**Ship criteria: two of three met.** The bar this document set was a real
+tool with a defined failure mode, traces good enough to debug a wrong
+trajectory, and an evaluation set showing the loop does not degrade Layer 1.
+The interrupt capability is that tool — its failure modes (no answer path,
+repeated targets, budget exhaustion) are defined and tested — and
+`agent_trace.json` records every observation, proposal, authorization verdict
+and stop reason in order. The evaluation set does not exist. That criterion
+is not weakened by the other two being met: until packages produced with the
+loop are measured against plain workflow runs, this layer is a capability,
+not a proven improvement, and it is not called done here.
 
-* at least one real tool exists, with its failure mode defined and tested — a
-  loop with nothing to call is a loop with no decision to make
-* execution traces exist, because a wrong trajectory cannot be debugged from a
-  final answer alone, and adding traces after the fact means debugging blind in
-  the interim
-* an evaluation set exists showing the loop does not degrade what Layer 1
-  already produces correctly
-
-The runtime precondition is met and the full workflow now runs on it: typed
-state, the provider seam, and the validate-then-route pattern all carry the
-complete package path, so this layer arrives as new nodes and edges on a
-structure that already does real work. Nothing else has changed: the three
-criteria above stand, and none of them is satisfied by the runtime alone — the
-loop still needs a real tool with a defined failure mode, trajectory-level
-traces, and the evaluation set.
+**What Layer 3 still owes.** State across runs — a thread survives its own
+interrupts, but nothing survives the process — and feedback rounds beyond a
+single question: the tool-results and post-interview decisions anticipated
+above remain unbuilt, and both belong to durable state.
 
 ## Layer 3 — durable state · planned
 

@@ -18,9 +18,12 @@ omit unset fields rather than writing null — and with no importance data the
 focus ordering reduces to gaps first in source order.
 
 A `prep` run writes three further artifacts — `strategy.json`,
-`questions.json`, and `prep_package.json` when the package gate passes — but
-those stages call a provider, so no committed run exists: a committed artifact
-must be a deterministic function of the repo, and a model response is not.
+`questions.json`, and `prep_package.json` when the package gate passes — and
+an `agent` run adds `agent_trace.json`, the ordered record of every
+observation, proposal, authorization verdict and stop reason from the
+decision loop. Neither has a committed run: those stages call a provider, and
+a committed artifact must be a deterministic function of the repo, which a
+model response is not.
 
 Reading them in order is the argument for the design: a wrong verdict in
 `focus_plan.json` can be traced back to a specific score in `matches.json`, and

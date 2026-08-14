@@ -75,6 +75,45 @@ every structural check while being about nobody, which is worse than an error
 because it cannot be distinguished from a real result afterwards. A user who
 wants the offline behaviour chooses it explicitly with the lexical flags.
 
+## The model only ever proposes
+
+In the decision loop, the model's entire authority is one proposed action per
+cycle, chosen from a set that code derived before the model was consulted.
+Code authorizes, routes, executes, counts the budget down, and stops the run.
+The alternative — letting the model route directly, or letting it decide when
+it is finished — would be less code and fewer round trips. It was rejected
+because authority that lives in one place can be audited in one place: every
+gate is a pure function with a hand-built failing test, and a wrong trajectory
+is debuggable by reading which proposal was rejected and why. The cost is a
+loop that is more machinery than prompt, and a model that can be overruled by
+its own runtime — which is the point.
+
+## Clarifications become evidence, not prompt context
+
+A human answer at an interrupt could simply be appended to the next prompt.
+It is instead minted as a first-class evidence item in its own CL- series,
+with the requirement it addresses and the question asked as provenance, and
+the package is regenerated over the enlarged corpus through the unchanged
+workflow. The reason is the system's one guarantee: every claim cites a
+resolvable source. An answer that lives only in a prompt is exactly the kind
+of unattributable input the gates exist to keep out — a match influenced by
+it would cite nothing. As evidence, the answer is matched, scored, cited and
+gate-checked like anything else, so traceability survives the human in the
+loop. The cost is a full regeneration per answer instead of an incremental
+patch; incremental update is Layer 3's problem, deliberately.
+
+## Budgets are settings, not constants
+
+The action budget and the question ceiling live in ``Settings`` beside the
+matching bounds, not as constants in the agent module. They are operational
+limits a deployment should be able to tighten or relax without editing code —
+a cautious run wants one question and four actions; a batch evaluation wants
+zero questions — and putting them beside the other tunables keeps every bound
+the system enforces discoverable in one file. Authorization reads them at
+graph build time; nothing in a prompt can change them. The defaults stay
+deliberately small, because the ceilings are load-bearing: they are what makes
+"bounded" a property of the code rather than a description of intent.
+
 ## Tracing lives inside the seam, off by default
 
 Optional observability is wired at exactly one place: the provider

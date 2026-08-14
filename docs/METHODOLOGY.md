@@ -200,6 +200,53 @@ structural breakage and broken reference chains. They cannot catch output that
 is structurally valid and semantically wrong — only the evaluation set does
 that.
 
+## The decision layer
+
+The loop around the workflow moves control to a model at exactly one point —
+which allowed action comes next — and the method is the same three-part
+discipline as every other stage: derive deterministically, propose against a
+schema, judge in code.
+
+**Observation.** Pure code compresses the run into a factual snapshot: whether
+a package exists and whether it is valid, the high-priority gaps (verdicts at
+GAP coverage whose requirement carries importance of 4 or 5, sorted by
+importance descending then identifier — a requirement without importance never
+qualifies, because interrupting a human on a guess is not a judgment code is
+entitled to make), which requirements have been asked, the latest answer, the
+last action, and the steps remaining.
+
+**Allowed actions**, derived in order, first rule wins:
+
+1. budget exhausted → nothing
+2. nothing generated yet → `GENERATE_PREP_PACKAGE`
+3. just resumed from `ASK_USER` with an answer in hand → `GENERATE_PREP_PACKAGE`
+4. an eligible unasked gap and question budget left → `ASK_USER`
+5. a valid package → `FINISH`
+6. otherwise → `GENERATE_PREP_PACKAGE`
+
+**Authorization gates**, applied by code to the one proposed action:
+
+* the action budget must not be exhausted
+* the action must be in the derived allowed set
+* `ASK_USER` must carry a question and a target; the target must be an
+  eligible high-priority gap, never one already asked, and within the
+  question ceiling
+* `FINISH` requires a valid package and no eligible unasked gap
+
+A rejected proposal is retried once with the rejection text in the next
+prompt; a second rejection stops the run with `invalid_decision`. An empty
+budget stops immediately with `action_budget_exhausted` — a retry cannot
+refill it. A completed run stops with `valid_package_complete`.
+
+**Clarifications as evidence.** A human answer at an interrupt is normalized
+into a first-class evidence item in its own `CL-` identifier series
+(`CL-001`, `CL-002`, …), carrying the answer as its summary and, as
+provenance, the requirement it addresses and the question that was asked.
+Regeneration serializes the enlarged corpus back to the canonical form and
+passes it through the unchanged workflow, so a match citing a clarification
+cites an identifier that resolves like any other — the traceability guarantee
+extends through the human in the loop rather than around them.
+
 ## Evaluation
 
 There is none yet, beyond the smoke tests. Reporting a coverage number over a
