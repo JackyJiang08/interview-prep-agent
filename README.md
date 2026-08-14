@@ -5,9 +5,13 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 Turns a job posting plus attested experience — a YAML corpus or a markdown
-resume — into a validated interview preparation package. Every claim cites the
-source that justifies it, so a wrong answer is a wrong link a reader can find
-and reject. Built in stages, each only as autonomous as its decisions require.
+resume — into a validated interview preparation package. Every claim cites
+the source that justifies it, so a wrong answer is a wrong link a reader can
+find and reject. It runs as a bounded human-in-the-loop agent: each cycle the
+model proposes one action from a code-derived allowed set, and deterministic
+gates authorize, route and stop — a human is pulled in for exactly the
+evidence that is missing, and the answer is minted as citable evidence, never
+loose prompt context.
 
 ## Status
 
@@ -17,8 +21,8 @@ and reject. Built in stages, each only as autonomous as its decisions require.
 | [Model-backed extraction](docs/METHODOLOGY.md#stage-1---extraction) — behind a provider seam, output never trusted raw | **shipped** |
 | [Model-backed matching](docs/METHODOLOGY.md#stage-2---matching) — same seam, FULL/PARTIAL/GAP coverage; lexical stays the default | **shipped** |
 | [Preparation package](docs/METHODOLOGY.md#stages-3-5---assessment-strategy-questions) — gap assessment, strategy, questions, package gate with a routed error branch | **shipped** |
-| [Bounded decision layer](docs/ARCHITECTURE.md#layer-2--bounded-decision-layer--next) — a closed action set once tools make "what next" a real decision | next |
-| [Durable state](docs/ARCHITECTURE.md#layer-3--durable-state--planned) — new information updates a plan instead of regenerating it | planned |
+| [Bounded decision layer](docs/ARCHITECTURE.md#layer-2--bounded-decision-layer--shipped-unevaluated) — observe, propose, authorize; one human question per run, gate-checked at every step | **shipped — unevaluated** |
+| [Durable state](docs/ARCHITECTURE.md#layer-3--durable-state--planned) — same-thread resume already persists within a run; state across runs remains planned | planned |
 | [Evaluation set + failure analysis](docs/ARCHITECTURE.md#cross-cutting--traces-evaluation-failure-analysis--planned) — gates most other work | planned |
 
 ## Quickstart
@@ -39,13 +43,9 @@ Runs offline on the committed synthetic example, no configuration or key:
 
 ```
 Coverage: 6 requirements | 3 PROOF | 3 GAP
-Method: lexical-idf-v1
-
 [GAP ] REQ-002 Experience designing and interpreting A/B tests
         No evidence item covers this requirement. Prepare it first.
-...
 [PROOF] REQ-003 Build and maintain ETL pipelines in a cloud data warehouse
-        Supported by EV-002.
         - EV-002 score=0.76 terms=cloud, data, etl, pipelines, warehouse
 ```
 
@@ -74,9 +74,21 @@ evidence corpus. Optional tracing: set `LANGSMITH_TRACING=true` plus a key to
 trace provider calls and graph runs — traced runs upload inputs and outputs,
 so use synthetic data, never a real posting or resume.
 
+The decision loop is the `agent` command, same variables:
+
+```bash
+interview-prep-agent agent \
+  --jd examples/sample_job_description.txt \
+  --evidence examples/sample_evidence.yaml --out out/
+```
+
+When evidence is missing on a high-importance requirement, the run pauses to
+ask one focused factual question and resumes with the answer minted as citable
+`CL-` evidence; `agent_trace.json` records every proposal and verdict.
+
 ## Current state
 
-Works today, covered by 98 tests:
+Works today, covered by 123 tests:
 
 * Requirement extraction from list-formatted postings, wording preserved
 * Model-backed extraction and matching behind one provider seam, output
@@ -87,10 +99,14 @@ Works today, covered by 98 tests:
   stable-identifier chain by the package gate
 * Package validation routing failures to an error report — a run that fails
   its gate ends with errors listed and no package artifact
+* The bounded decision loop (`agent`): code-derived allowed actions, one
+  model proposal per cycle, every gate applied by code, budgets from settings
+* An interactive interrupt whose answer becomes first-class `CL-` evidence,
+  with `agent_trace.json` recording each observation, proposal and verdict
 * Evidence from a YAML corpus or a markdown resume, identifiers minted once
   at the boundary
-* Per-stage JSON artifacts, `match` and `prep` commands, settings from
-  `--config`, then `IPA_CONFIG`, then the packaged default
+* Per-stage JSON artifacts, the `match`, `prep` and `agent` commands,
+  settings from `--config`, then `IPA_CONFIG`, then the packaged default
 
 Known limitations, in order of how much they cost:
 
@@ -100,6 +116,10 @@ Known limitations, in order of how much they cost:
   close that, and its grounding is gate-checked, but whether its judgments are
   *right* has never been scored against labelled data. Neither path can honestly
   be called better yet; that claim needs the evaluation set, which is planned.
+* **The agent loop is a capability, not a proven improvement.** It works and
+  is gate-authorized at every step, but nothing yet measures whether the
+  packages it produces are better than a plain workflow run; that comparison
+  needs the evaluation set, which is planned.
 * **Model extraction is unmeasured.** Same shape: it reads prose the splitter
   cannot, its quotes are verified real, and its judgment is unscored.
 * **The threshold is unvalidated.** `0.30` was set by inspecting one synthetic
