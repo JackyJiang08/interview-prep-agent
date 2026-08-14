@@ -76,16 +76,21 @@ class RequirementExtraction(BaseModel):
 class EvidenceItem(BaseModel):
     """One attested item from the candidate's evidence corpus.
 
-    ``source`` records where the item came from — a corpus file, or the resume
-    section that held the bullet — so a citation can be traced past the
-    identifier back to the document.
+    ``source`` records where the item came from — a corpus file, the resume
+    section that held the bullet, or a clarification — so a citation can be
+    traced past the identifier back to the document. Items minted from a
+    human's answer use the ``CL-`` identifier series and carry the requirement
+    they address and the question that was asked, so the traceability
+    guarantee extends through the human in the loop rather than around them.
     """
 
-    id: str = Field(pattern=r"^EV-\d{3,}$")
+    id: str = Field(pattern=r"^(?:EV|CL)-\d{3,}$")
     summary: str = Field(min_length=1)
     skills: list[str] = Field(default_factory=list)
     impact: str | None = None
     source: str | None = None
+    addresses_requirement_id: str | None = Field(default=None, pattern=r"^REQ-\d{3,}$")
+    question: str | None = None
 
 
 class EvidenceMatch(BaseModel):
@@ -281,3 +286,68 @@ class FocusPlan(BaseModel):
     coverage: Coverage
     items: list[PlanItem] = Field(default_factory=list)
     method: str
+
+
+class AgentAction(StrEnum):
+    """The complete set of actions the decision loop can ever take."""
+
+    ASK_USER = "ASK_USER"
+    GENERATE_PREP_PACKAGE = "GENERATE_PREP_PACKAGE"
+    FINISH = "FINISH"
+
+
+class Clarification(BaseModel):
+    """One factual answer a human supplied at an interrupt."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    requirement_id: str = Field(pattern=r"^REQ-\d{3,}$")
+    question: str = Field(min_length=1)
+    answer: str = Field(min_length=1)
+
+
+class HighPriorityGap(BaseModel):
+    """Decision context for one unresolved gap worth interrupting a human for."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    requirement_id: str = Field(pattern=r"^REQ-\d{3,}$")
+    text: str = Field(min_length=1)
+    importance: int = Field(ge=4, le=5)
+    explanation: str = Field(min_length=1)
+
+
+class AgentObservation(BaseModel):
+    """A factual snapshot of the run, and the only thing the model is shown.
+
+    Every field is derived deterministically from business state; nothing here
+    is hidden reasoning, and the allowed actions are computed by code before
+    the model is consulted.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    package_generated: bool
+    package_valid: bool
+    high_priority_gap_ids: list[str] = Field(default_factory=list)
+    high_priority_gaps: list[HighPriorityGap] = Field(default_factory=list)
+    asked_requirement_ids: list[str] = Field(default_factory=list)
+    allowed_actions: list[AgentAction] = Field(default_factory=list)
+    latest_clarification: str | None = None
+    last_action: AgentAction | None = None
+    steps_remaining: int = Field(ge=0)
+
+
+class AgentDecision(BaseModel):
+    """Exactly one model-proposed action, awaiting code-owned authorization.
+
+    Doubles as the response schema for the decide stage. The proposal is the
+    model's entire authority: code authorizes, routes, executes and stops.
+    """
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    next_action: AgentAction
+    target_requirement_id: str | None = Field(default=None, pattern=r"^REQ-\d{3,}$")
+    question: str | None = None
+    reason_summary: str = Field(min_length=1)

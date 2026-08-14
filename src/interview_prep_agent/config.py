@@ -38,6 +38,13 @@ class Settings(BaseModel):
     min_requirements: int = Field(default=1, ge=0)
     max_requirements: int = Field(default=50, ge=1)
 
+    # Bounds on the decision loop. The action budget caps how many actions a
+    # run may take before it is stopped by code; the question budget caps how
+    # many times it may interrupt a human. Both are hard ceilings enforced by
+    # authorization, not suggestions in a prompt.
+    max_agent_actions: int = Field(default=4, ge=1)
+    max_questions_per_run: int = Field(default=1, ge=0)
+
 
 def load_settings(path: Path | None = None) -> Settings:
     """Load settings from YAML.
