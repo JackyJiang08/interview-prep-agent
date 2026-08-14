@@ -106,6 +106,40 @@ def build_parser() -> argparse.ArgumentParser:
     )
     prep.set_defaults(handler=run_prep_command)
 
+    agent = subcommands.add_parser(
+        "agent",
+        help="run the bounded decision loop, pausing for answers when asked",
+        description=(
+            "Run the decision loop around the preparation workflow. The loop "
+            "may interrupt with one focused factual question about a "
+            "high-priority gap; the answer becomes first-class evidence and "
+            "the package is regenerated over the enlarged corpus. The decide "
+            "stage calls a provider, so this command needs GEMINI_API_KEY."
+        ),
+    )
+    agent.add_argument("--jd", required=True, type=Path, help="job description text file")
+    agent.add_argument(
+        "--evidence",
+        required=True,
+        type=Path,
+        help="evidence corpus (.yaml/.json) or markdown resume (.md)",
+    )
+    agent.add_argument("--out", type=Path, default=None, help="directory for artifacts")
+    agent.add_argument("--config", type=Path, default=None, help="settings file")
+    agent.add_argument(
+        "--extractor",
+        choices=EXTRACTORS,
+        default=LEXICAL,
+        help="requirement extraction path (default: lexical)",
+    )
+    agent.add_argument(
+        "--matcher",
+        choices=MATCHERS,
+        default=LEXICAL,
+        help="evidence matching path (default: lexical)",
+    )
+    agent.set_defaults(handler=run_agent_command)
+
     return parser
 
 
@@ -201,6 +235,58 @@ def run_prep_command(args: argparse.Namespace) -> int:
     if args.out is not None:
         print(f"Artifacts written to {args.out}", file=sys.stderr)
     return 0
+
+
+def run_agent_command(args: argparse.Namespace) -> int:
+    """Handle the ``agent`` subcommand."""
+    from .agent import run_agent
+    from .workflow.pipeline import _resolve_extractor, _resolve_matcher
+
+    def ask_on_stdin(requirement_id: str, question: str) -> str:
+        print(f"\nThe loop needs one fact about {requirement_id}:")
+        print(f"  {question}")
+        return input("> ").strip()
+
+    try:
+        job_description = load_job_description(args.jd)
+        evidence_source = Path(args.evidence).read_text(encoding="utf-8")
+        evidence_format = (
+            "markdown" if Path(args.evidence).suffix.lower() in (".md", ".markdown") else "corpus"
+        )
+        settings = load_settings(args.config)
+        # The decide stage always calls a provider, so the key is required up
+        # front rather than failing one observation in.
+        model = build_model()
+        state, _trace = run_agent(
+            job_description,
+            evidence_source,
+            evidence_format,
+            ask_on_stdin,
+            settings,
+            args.out,
+            model=model,
+            extractor=_resolve_extractor(args.extractor, model),
+            matcher=_resolve_matcher(args.matcher, model),
+        )
+    except (CorpusError, ProviderError, QualityGateError, OSError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+
+    stop_reason = state.get("stop_reason") or "none"
+    print(f"Stopped: {stop_reason} after {state.get('action_count', 0)} action(s)")
+    if state.get("package_valid") and state.get("prep_package") is not None:
+        package = state["prep_package"]
+        print(
+            f"Package assembled: {len(package.requirements)} requirements | "
+            f"{len(package.focus_areas)} focus areas | "
+            f"{len(package.mock_questions)} questions"
+        )
+    else:
+        for item in state.get("validation_errors", []):
+            print(f"  - {item}", file=sys.stderr)
+    if args.out is not None:
+        print(f"Artifacts written to {args.out}", file=sys.stderr)
+    return 0 if state.get("stop_reason") == "valid_package_complete" else 1
 
 
 def main(argv: list[str] | None = None) -> int:
