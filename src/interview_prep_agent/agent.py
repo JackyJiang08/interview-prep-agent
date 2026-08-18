@@ -1,27 +1,26 @@
-"""The bounded decision loop around the preparation workflow.
+"""The evidence-gated human-in-the-loop layer around the preparation workflow.
 
-    START -> observe -> decide -> authorize
-                                    |- generate -> observe
-                                    |- ask      -> observe
-                                    |- retry    -> decide
-                                    |- finish   -> END
-                                    |- invalid  -> END
+    START -> parse_round -> generate_initial -> observe
+                                                  |- ask -> assess -> observe
+                                                  |- generate_final -> END
+                                                  |- invalid -> END
 
-This is the one place in the system where control passes to a model, and the
-claim about how little control that is can be stated precisely. Every branch
-target is fixed when the graph is built. ``observe`` derives a factual
-snapshot and the allowed actions in pure code. ``decide`` shows the model that
-snapshot — never hidden reasoning, never raw state — and receives exactly one
-proposed action against a schema. ``authorize`` applies every gate in code and
-computes the route; the conditional edge maps only that code-chosen value. The
-capabilities execute, the budget counts down, and code stops the run. The
-model's entire authority is one proposal per cycle; it never routes, never
-executes, and never approves its own proposal.
+There is no decide node. When the rule became "process every gap exactly once
+in a deterministic order," the next action stopped being a decision and became
+a computable function — and autonomy proportional to the decision cuts both
+ways, so routing returned to pure code. The model's judgment now lives in the
+two places code genuinely cannot judge: what kind of interview round a
+freeform description denotes, and whether a human's answer actually evidences
+a requirement. Both sit behind code-owned gates: the parsed round reaches only
+the preparation prompts, and an assessment is advice that the admission gate —
+answer length, target identity, validity, a non-empty admitted claim — must
+approve before anything becomes evidence.
 
-Clarifications gathered at interrupts become first-class ``CL-`` evidence
-items, and regeneration passes the enlarged corpus through the unchanged
-workflow — so the traceability guarantee extends through the human in the
-loop rather than around them.
+Admitted answers mint ``CL-`` evidence whose summary is the admitted claim,
+not the raw answer, so nothing stronger than what the gate approved can ever
+be cited. Rejected answers change audit state only; the requirement stays a
+gap. Neither generation writes anything to disk — artifacts are the runner's
+job, and only the final state produces them.
 """
 
 from __future__ import annotations
@@ -38,14 +37,13 @@ from langgraph.types import Command, interrupt
 
 from .corpus import clarification_to_evidence, parse_evidence_corpus, parse_evidence_markdown
 from .models import (
-    AgentAction,
-    AgentDecision,
-    AgentObservation,
     Clarification,
+    ClarificationAssessment,
+    ClarificationRecord,
     CoverageLevel,
     EvidenceItem,
     FocusArea,
-    HighPriorityGap,
+    InterviewRound,
     InterviewStrategy,
     MockQuestion,
     PrepPackage,
@@ -56,16 +54,12 @@ from .providers import ProviderError, StructuredModel
 from .workflow.extract import extract_requirements
 from .workflow.graph import Extractor, Matcher, build_prep_workflow
 
-DEFAULT_GOAL = "Produce a grounded, validated preparation package without inventing evidence."
-
-MAX_DECISION_RETRIES = 1
-
-# Importance at or above which a gap justifies interrupting a human.
-HIGH_PRIORITY_IMPORTANCE = 4
-
 STOP_VALID_PACKAGE = "valid_package_complete"
-STOP_INVALID_DECISION = "invalid_decision"
+STOP_INVALID_INITIAL = "invalid_initial_package"
+STOP_INVALID_FINAL = "invalid_final_package"
 STOP_BUDGET_EXHAUSTED = "action_budget_exhausted"
+
+CEILING_NOTE = "question ceiling reached with gaps remaining"
 
 # Business fields copied back from a workflow run. Nothing else crosses:
 # the workflow's own control fields stay its own.
@@ -81,39 +75,57 @@ WORKFLOW_RESULT_FIELDS = (
     "package_valid",
 )
 
-AGENT_INSTRUCTIONS = """\
-You propose the next action for a bounded interview-preparation loop.
+ROUND_PARSING_INSTRUCTIONS = """\
+You parse a freeform description of an upcoming interview round.
 
-The runtime has already derived allowed_actions in code, and it will reject
-anything else. Choose exactly one action from allowed_actions.
+Extract only details explicitly present in the text. Do not infer missing
+facts, do not guess a format from a role, and do not fill conventional
+defaults. Leave optional strings null and optional lists empty when the text
+does not supply them.
 
-- ASK_USER: pick one requirement from high_priority_gaps whose identifier is
-  not in asked_requirement_ids, and phrase one focused, factual question that
-  its text and explanation justify. Supply that target_requirement_id and the
-  question. Ask for facts the candidate would know, never for reassurance.
-- GENERATE_PREP_PACKAGE or FINISH: omit target_requirement_id and question.
+Return nothing except data conforming to the supplied schema.
+"""
 
-Respect steps_remaining. Keep reason_summary to one sentence of fact, not
-narration. Return nothing except data conforming to the supplied schema.
+ASSESSMENT_INSTRUCTIONS = """\
+You assess whether one candidate answer may be admitted as evidence for
+exactly one job requirement.
+
+Rubric:
+
+- target_requirement_id must exactly match the supplied requirement's
+  identifier.
+- is_valid may be true only when the answer directly addresses the
+  requirement with a concrete first-person claim about what the candidate
+  actually did.
+- Reject vague interest, plans to learn, unsupported self-ratings, unrelated
+  experience, and answers that merely restate the requirement.
+- accepted_claim must be a concise, faithful restatement of facts explicitly
+  in the answer. Never strengthen, infer, or invent. When is_valid is false,
+  accepted_claim must be null.
+
+Return nothing except data conforming to the supplied schema.
 """
 
 
 class AgentState(TypedDict, total=False):
-    """Workflow business state plus the loop's control fields.
+    """Workflow business state plus queue, admission and audit state.
 
-    The two clarification lists carry additive reducers: an interrupt node
-    restarts on resume, and additive updates are what make that restart safe.
+    The additive lists exist because the interrupt node restarts on resume;
+    additive updates are what make that restart safe.
     """
 
     # source inputs
     job_description: str
     evidence_source: str
     evidence_format: str
-    goal: str
-    # human-supplied evidence, additive
+    round_text: str
+    # round context, parsed once
+    round_context: InterviewRound | None
+    # admission and audit, additive
     clarifications: Annotated[list[Clarification], operator.add]
     clarification_evidence: Annotated[list[EvidenceItem], operator.add]
-    asked_requirement_ids: Annotated[list[str], operator.add]
+    clarification_records: Annotated[list[ClarificationRecord], operator.add]
+    processed_requirement_ids: Annotated[list[str], operator.add]
     # workflow-derived business state
     evidence: list[EvidenceItem]
     requirements: list[Requirement]
@@ -125,14 +137,14 @@ class AgentState(TypedDict, total=False):
     validation_errors: list[str]
     package_valid: bool
     # loop control
-    observation: AgentObservation
-    decision: AgentDecision
-    package_generated: bool
-    last_action: AgentAction | None
+    current_gap: Requirement | None
+    current_question: str | None
+    pending_answer: str | None
+    question_budget_left: bool
+    initial_gap_count: int
     action_count: int
-    decision_retry_count: int
-    authorization_error: str | None
-    authorized_route: str
+    initial_package_generated: bool
+    final_note: str | None
     stop_reason: str | None
 
 
@@ -142,154 +154,132 @@ class AgentInput(TypedDict):
     job_description: str
     evidence_source: str
     evidence_format: str
+    round_text: str
 
 
-def derive_observation(
-    state: AgentState, max_agent_actions: int, max_questions_per_run: int
-) -> AgentObservation:
-    """Compress business state into the factual snapshot the model is shown.
+def select_next_gap(
+    requirements: list[Requirement],
+    verdicts: list[RequirementMatch],
+    processed_requirement_ids: list[str],
+) -> Requirement | None:
+    """Select the next gap in the deterministic processing order.
 
-    Pure code, no model. High-priority gaps are verdicts at GAP coverage whose
-    requirement carries importance at or above the threshold, sorted by
-    importance descending then identifier; a requirement without importance
-    never qualifies, because interrupting a human on a guess is not a
-    judgment this code is entitled to make.
+    Eligible gaps are verdicts at GAP coverage whose requirement is known and
+    not yet processed — processed means asked once, not resolved. They are
+    sorted by importance descending, with missing importance sorting last,
+    then by requirement identifier ascending so ties are stable and
+    explainable. Returns ``None`` when the queue is empty.
     """
-    requirements = {item.id: item for item in state.get("requirements", [])}
+    by_id = {item.id: item for item in requirements}
+    processed = set(processed_requirement_ids)
 
-    gaps: list[HighPriorityGap] = []
-    for verdict in state.get("matches", []):
-        requirement = requirements.get(verdict.requirement_id)
-        if (
-            verdict.coverage is CoverageLevel.GAP
-            and requirement is not None
-            and requirement.importance is not None
-            and requirement.importance >= HIGH_PRIORITY_IMPORTANCE
-        ):
-            gaps.append(
-                HighPriorityGap(
-                    requirement_id=requirement.id,
-                    text=requirement.text,
-                    importance=requirement.importance,
-                    explanation=verdict.explanation or "No explanation recorded.",
-                )
-            )
-    gaps.sort(key=lambda gap: (-gap.importance, gap.requirement_id))
-    gap_ids = [gap.requirement_id for gap in gaps]
-
-    clarifications = state.get("clarifications", [])
-    asked = state.get("asked_requirement_ids", [])
-    unasked_gap_ids = [identifier for identifier in gap_ids if identifier not in asked]
-    steps_remaining = max(0, max_agent_actions - state.get("action_count", 0))
-    package_generated = state.get("package_generated", False)
-    package_valid = state.get("package_valid", False)
-    last_action = state.get("last_action")
-
-    # The allowed set is derived, not suggested. Order of the rules matters:
-    # nothing exists yet -> generate; a fresh answer is in hand -> fold it in;
-    # an eligible unasked gap and question budget -> ask; a valid package and
-    # nothing left to ask -> finish; anything else -> regenerate.
-    allowed: list[AgentAction]
-    if steps_remaining == 0:
-        allowed = []
-    elif not package_generated:
-        allowed = [AgentAction.GENERATE_PREP_PACKAGE]
-    elif last_action is AgentAction.ASK_USER and clarifications:
-        allowed = [AgentAction.GENERATE_PREP_PACKAGE]
-    elif unasked_gap_ids and len(asked) < max_questions_per_run:
-        allowed = [AgentAction.ASK_USER]
-    elif package_valid:
-        allowed = [AgentAction.FINISH]
-    else:
-        allowed = [AgentAction.GENERATE_PREP_PACKAGE]
-
-    return AgentObservation(
-        package_generated=package_generated,
-        package_valid=package_valid,
-        high_priority_gap_ids=gap_ids,
-        high_priority_gaps=gaps,
-        asked_requirement_ids=asked,
-        allowed_actions=allowed,
-        latest_clarification=clarifications[-1].answer if clarifications else None,
-        last_action=last_action,
-        steps_remaining=steps_remaining,
-    )
+    queue = [
+        by_id[verdict.requirement_id]
+        for verdict in verdicts
+        if verdict.coverage is CoverageLevel.GAP
+        and verdict.requirement_id in by_id
+        and verdict.requirement_id not in processed
+    ]
+    queue.sort(key=lambda item: (-(item.importance or 0), item.id))
+    return queue[0] if queue else None
 
 
-def build_decision_prompt(
-    goal: str, observation: AgentObservation, previous_error: str | None = None
-) -> str:
-    """Place the goal and snapshot after the instructions.
+def admission_failure(
+    answer: str,
+    assessment: ClarificationAssessment,
+    target_requirement_id: str,
+    min_clarification_length: int,
+) -> str | None:
+    """Apply every code-owned evidence-admission gate to one answer.
 
-    A prior authorization error is included verbatim, so a retry is a
-    correction rather than a blind second attempt.
+    Returns the first failure, or ``None`` when the answer may be admitted.
+    The gates run in order of cheapness and trust: the length floor needs no
+    model at all; the target check means model output cannot redirect
+    evidence to a requirement that was never asked about; only then do the
+    assessment's own verdict and its admitted claim count.
     """
-    error_block = (
-        f"\n----- PRIOR PROPOSAL REJECTED BY CODE -----\n{previous_error}\n"
-        if previous_error
-        else ""
-    )
+    if len(answer.strip()) < min_clarification_length:
+        return f"admission: the answer must contain at least {min_clarification_length} characters"
+    if assessment.target_requirement_id != target_requirement_id:
+        return (
+            f"admission: the assessment targeted "
+            f"{assessment.target_requirement_id}, not the requirement asked "
+            f"({target_requirement_id})"
+        )
+    if not assessment.is_valid:
+        return (
+            "admission: the assessment rejected the answer — "
+            f"{assessment.relevance_reason} {assessment.specificity_reason}"
+        )
+    if not assessment.accepted_claim or not assessment.accepted_claim.strip():
+        return "admission: a valid assessment must carry a non-empty accepted claim"
+    return None
+
+
+def should_admit(
+    answer: str,
+    assessment: ClarificationAssessment,
+    target_requirement_id: str,
+    min_clarification_length: int,
+) -> bool:
+    """Boolean form of :func:`admission_failure`; one implementation."""
     return (
-        f"{AGENT_INSTRUCTIONS}\n"
-        "----- GOAL -----\n"
-        f"{goal}\n"
-        "----- OBSERVATION -----\n"
-        f"{json.dumps(observation.model_dump(mode='json'), indent=2, ensure_ascii=False)}\n"
-        f"{error_block}"
+        admission_failure(answer, assessment, target_requirement_id, min_clarification_length)
+        is None
     )
 
 
-def authorize(
-    decision: AgentDecision,
-    observation: AgentObservation,
-    max_questions_per_run: int,
-) -> tuple[Literal["generate", "ask", "finish"], None] | tuple[Literal["invalid"], str]:
-    """Apply every code-owned gate to one proposed action.
+def build_question(gap: Requirement) -> str:
+    """Build the one focused factual question for a gap, in code."""
+    return (
+        "Share one specific example from your experience that demonstrates "
+        f"this requirement: {gap.text}. Include what you did, the method or "
+        "tools you used, and the result."
+    )
 
-    Pure function: the proposal and the snapshot in, a route or a rejection
-    out. Nothing here consults a model, and nothing outside this function
-    decides what a proposal is allowed to do.
+
+def build_round_parsing_prompt(round_text: str) -> str:
+    """Place the freeform round text after the parsing instructions."""
+    return f"{ROUND_PARSING_INSTRUCTIONS}\n----- ROUND DESCRIPTION -----\n{round_text}\n"
+
+
+def build_assessment_prompt(gap: Requirement, question: str, answer: str) -> str:
+    """Build the short-context assessment prompt: one requirement, one answer.
+
+    Deliberately narrow — the assessor sees the target requirement, the
+    question and the answer, not the whole run, so its advice cannot be
+    steered by anything except the exchange it is judging.
     """
-    action = decision.next_action
+    target = {"requirement_id": gap.id, "requirement": gap.text}
+    return (
+        f"{ASSESSMENT_INSTRUCTIONS}\n"
+        "----- TARGET REQUIREMENT -----\n"
+        f"{json.dumps(target, indent=2, ensure_ascii=False)}\n"
+        "----- QUESTION -----\n"
+        f"{question}\n"
+        "----- CANDIDATE ANSWER -----\n"
+        f"{answer}\n"
+    )
 
-    if observation.steps_remaining < 1:
-        return "invalid", (
-            f"authorization: the action budget is exhausted "
-            f"({len(observation.asked_requirement_ids)} asked, 0 steps remaining)"
-        )
 
-    if action not in observation.allowed_actions:
-        allowed = ", ".join(item.value for item in observation.allowed_actions) or "none"
-        return "invalid", (f"authorization: {action.value} is not in the allowed set ({allowed})")
+def route_after_observation(
+    state: AgentState,
+) -> Literal["ask", "generate_final", "invalid"]:
+    """Route from code-owned package validity, queue state and budgets.
 
-    if action is AgentAction.GENERATE_PREP_PACKAGE:
-        return "generate", None
-
-    if action is AgentAction.FINISH:
-        if not observation.package_valid:
-            return "invalid", "authorization: FINISH requires a valid package"
-        unasked = set(observation.high_priority_gap_ids) - set(observation.asked_requirement_ids)
-        if unasked and len(observation.asked_requirement_ids) < max_questions_per_run:
-            return "invalid", (
-                "authorization: FINISH requires no eligible unasked "
-                f"high-priority gap (open: {', '.join(sorted(unasked))})"
-            )
-        return "finish", None
-
-    # ASK_USER
-    if not decision.target_requirement_id or not decision.question:
-        return "invalid", ("authorization: ASK_USER requires a target requirement and a question")
-    if decision.target_requirement_id not in observation.high_priority_gap_ids:
-        return "invalid", (
-            f"authorization: {decision.target_requirement_id} is not an eligible high-priority gap"
-        )
-    if decision.target_requirement_id in observation.asked_requirement_ids:
-        return "invalid", (
-            f"authorization: {decision.target_requirement_id} has already been asked"
-        )
-    if len(observation.asked_requirement_ids) >= max_questions_per_run:
-        return "invalid", (f"authorization: at most {max_questions_per_run} question(s) per run")
-    return "ask", None
+    Pure function; every input it reads was computed by deterministic code.
+    An invalid initial package and an exhausted action budget terminate with
+    their own stop reasons; an exhausted question ceiling with gaps remaining
+    proceeds to final generation, noted in the trace — exhaustion terminates
+    a phase, never raises.
+    """
+    if not state.get("package_valid", False):
+        return "invalid"
+    if state.get("stop_reason") == STOP_BUDGET_EXHAUSTED:
+        return "invalid"
+    if state.get("current_gap") is not None and state.get("question_budget_left", True):
+        return "ask"
+    return "generate_final"
 
 
 def build_agent_graph(
@@ -297,25 +287,38 @@ def build_agent_graph(
     checkpointer: Any = None,
     extractor: Extractor = extract_requirements,
     matcher: Matcher | None = None,
-    max_agent_actions: int = 4,
-    max_questions_per_run: int = 1,
+    max_agent_actions: int | None = None,
+    agent_action_cap: int = 32,
+    max_questions_per_run: int | None = None,
+    min_clarification_length: int = 24,
     match_threshold: float = 0.30,
     max_matches: int = 3,
     min_requirements: int = 1,
     max_requirements: int = 50,
     min_questions: int = 8,
 ):
-    """Compile the decision loop.
+    """Compile the evidence-gated loop.
+
+    Control flow is entirely code-owned: every branch target is fixed at
+    build time and the one conditional routes on package validity, the
+    deterministic gap queue, and budgets. The model is consulted for data at
+    exactly three points — the optional round parse, the workflow's
+    preparation stages, and the per-answer assessment — and each of its
+    outputs faces a code-owned gate before it can affect anything.
 
     Args:
-        model: Provider for the decide stage and the workflow's model stages.
-            Resolved lazily when omitted, so the graph compiles offline.
-        checkpointer: Optional checkpointer; required for interrupt and
-            resume, since a resumed thread is the same thread.
+        model: Provider for the model stages. Resolved lazily when omitted,
+            so the graph compiles offline.
+        checkpointer: Required for interrupt and resume.
         extractor: Stage 1 implementation for the inner workflow.
         matcher: Stage 2 implementation for the inner workflow.
-        max_agent_actions: Hard ceiling on actions per run.
-        max_questions_per_run: Hard ceiling on human interrupts per run.
+        max_agent_actions: Action budget; ``None`` derives it from the gap
+            queue plus the two generation runs.
+        agent_action_cap: Hard clamp on the derived or configured budget.
+        max_questions_per_run: Question ceiling; ``None`` means every gap
+            exactly once.
+        min_clarification_length: Answer floor enforced before any model
+            judgment is consulted.
         match_threshold: Lexical matcher threshold, passed through.
         max_matches: Citation cap, passed through.
         min_requirements: Extraction floor, passed through.
@@ -344,68 +347,31 @@ def build_agent_graph(
         min_questions=min_questions,
     )
 
-    def observe(state: AgentState) -> dict[str, Any]:
-        return {
-            "goal": state.get("goal") or DEFAULT_GOAL,
-            "observation": derive_observation(state, max_agent_actions, max_questions_per_run),
-            "decision_retry_count": 0,
-        }
-
-    def decide(state: AgentState) -> dict[str, Any]:
-        prompt = build_decision_prompt(
-            state.get("goal") or DEFAULT_GOAL,
-            state["observation"],
-            previous_error=state.get("authorization_error"),
+    def effective_action_budget(state: AgentState) -> int:
+        derived = (
+            max_agent_actions
+            if max_agent_actions is not None
+            else state.get("initial_gap_count", 0) + 2
         )
-        payload = resolve_model().generate_json(prompt, AgentDecision.model_json_schema())
+        return min(derived, agent_action_cap)
+
+    def parse_round(state: AgentState) -> dict[str, Any]:
+        """Parse optional freeform round text, once, before any generation."""
+        round_text = (state.get("round_text") or "").strip()
+        if not round_text:
+            return {"round_context": None}
+        payload = resolve_model().generate_json(
+            build_round_parsing_prompt(round_text), InterviewRound.model_json_schema()
+        )
         try:
-            decision = AgentDecision.model_validate(payload, from_attributes=True)
+            parsed = InterviewRound.model_validate(payload, from_attributes=True)
         except Exception as error:  # noqa: BLE001 - pydantic raises several types
             raise ProviderError(
                 f"model response did not match the requested schema: {error}"
             ) from error
-        # Only the validated decision enters state, never the raw response.
-        return {"decision": decision}
+        return {"round_context": parsed}
 
-    def authorize_node(state: AgentState) -> dict[str, Any]:
-        route, error = authorize(state["decision"], state["observation"], max_questions_per_run)
-        if route != "invalid":
-            return {
-                "authorized_route": route,
-                "authorization_error": None,
-                "last_action": state["decision"].next_action,
-                "action_count": state.get("action_count", 0) + 1,
-                **({"stop_reason": STOP_VALID_PACKAGE} if route == "finish" else {}),
-            }
-
-        budget_spent = state["observation"].steps_remaining < 1
-        retries = state.get("decision_retry_count", 0)
-        if not budget_spent and retries < MAX_DECISION_RETRIES:
-            # A retry can fix a bad proposal; it cannot fix an empty budget.
-            return {
-                "authorized_route": "retry",
-                "authorization_error": error,
-                "decision_retry_count": retries + 1,
-            }
-        return {
-            "authorized_route": "invalid",
-            "authorization_error": error,
-            "stop_reason": STOP_BUDGET_EXHAUSTED if budget_spent else STOP_INVALID_DECISION,
-        }
-
-    def route_authorized(
-        state: AgentState,
-    ) -> Literal["generate", "ask", "finish", "retry", "invalid"]:
-        """Return only the route authorization already computed."""
-        return state["authorized_route"]
-
-    def generate(state: AgentState) -> dict[str, Any]:
-        """Run the unchanged workflow over the corpus plus clarifications.
-
-        The enlarged corpus is serialized back to the canonical YAML form, so
-        the workflow's own boundary parses it exactly as it parses any corpus
-        — clarification items included, their identifiers intact.
-        """
+    def run_workflow_once(state: AgentState) -> dict[str, Any]:
         if state["evidence_format"] == "markdown":
             base = parse_evidence_markdown(state["evidence_source"])
         else:
@@ -416,82 +382,160 @@ def build_agent_graph(
             sort_keys=False,
             allow_unicode=True,
         )
-
         result = workflow.invoke(
             {
                 "job_description": state["job_description"],
                 "evidence_source": source,
                 "evidence_format": "corpus",
+                "round_context": state.get("round_context"),
             }
         )
-        update = {field: result.get(field) for field in WORKFLOW_RESULT_FIELDS}
-        update["package_generated"] = True
+        return {field: result.get(field) for field in WORKFLOW_RESULT_FIELDS}
+
+    def generate_initial(state: AgentState) -> dict[str, Any]:
+        """One full workflow run; the package is not written anywhere."""
+        update = run_workflow_once(state)
+        update["initial_package_generated"] = True
+        update["action_count"] = state.get("action_count", 0) + 1
+        return update
+
+    def observe(state: AgentState) -> dict[str, Any]:
+        """Pure selection of the next queue item and the budget state."""
+        current = select_next_gap(
+            state.get("requirements", []),
+            state.get("matches", []),
+            state.get("processed_requirement_ids", []),
+        )
+        asked = len(state.get("processed_requirement_ids", []))
+        budget_left = max_questions_per_run is None or asked < max_questions_per_run
+        update: dict[str, Any] = {
+            "current_gap": current,
+            "question_budget_left": budget_left,
+        }
+        if "initial_gap_count" not in state:
+            gap_count = sum(
+                1 for verdict in state.get("matches", []) if verdict.coverage is CoverageLevel.GAP
+            )
+            update["initial_gap_count"] = gap_count
+        if state.get("action_count", 0) >= effective_action_budget({**state, **update}):
+            update["stop_reason"] = STOP_BUDGET_EXHAUSTED
         return update
 
     def ask(state: AgentState) -> dict[str, Any]:
-        """Interrupt for one factual answer and fold it in as evidence.
+        """Interrupt for one answer; stage it and nothing else.
 
         Everything before ``interrupt()`` must stay idempotent: the node
-        restarts from its top on resume, and only the additive updates
-        returned after the answer arrives may change state.
+        restarts from its top on resume, and only the staging fields change
+        here — admission happens in the next node.
         """
-        decision = state["decision"]
-        if decision.target_requirement_id is None or decision.question is None:
-            raise ValueError("an authorized ASK_USER decision carries a target and a question")
-
+        gap = state.get("current_gap")
+        if gap is None:
+            raise ValueError("the ask capability requires a current gap")
+        question = build_question(gap)
         answer = interrupt(
             {
                 "type": "evidence_request",
-                "requirement_id": decision.target_requirement_id,
-                "question": decision.question,
+                "requirement_id": gap.id,
+                "question": question,
             }
         )
-        clarification = Clarification(
-            requirement_id=decision.target_requirement_id,
-            question=decision.question,
-            answer=str(answer),
-        )
-        minted = clarification_to_evidence(clarification, len(state.get("clarifications", [])) + 1)
         return {
-            "clarifications": [clarification],
-            "clarification_evidence": [minted],
-            "asked_requirement_ids": [decision.target_requirement_id],
+            "current_question": question,
+            "pending_answer": str(answer).strip(),
+            "action_count": state.get("action_count", 0) + 1,
         }
 
-    def finish(_state: AgentState) -> dict[str, Any]:
-        """End after code has authorized FINISH."""
-        return {}
+    def assess_and_admit(state: AgentState) -> dict[str, Any]:
+        """One short-context assessment, then the code-owned admission gate."""
+        gap = state.get("current_gap")
+        question = state.get("current_question")
+        answer = state.get("pending_answer")
+        if gap is None or question is None or answer is None:
+            raise ValueError("assessment requires a gap, a question and an answer")
 
-    def invalid(_state: AgentState) -> dict[str, Any]:
-        """End without executing anything after a rejected proposal."""
-        return {}
+        payload = resolve_model().generate_json(
+            build_assessment_prompt(gap, question, answer),
+            ClarificationAssessment.model_json_schema(),
+        )
+        try:
+            assessment = ClarificationAssessment.model_validate(payload, from_attributes=True)
+        except Exception as error:  # noqa: BLE001 - pydantic raises several types
+            raise ProviderError(
+                f"model response did not match the requested schema: {error}"
+            ) from error
+
+        failure = admission_failure(answer, assessment, gap.id, min_clarification_length)
+        accepted = failure is None
+        accepted_claim = assessment.accepted_claim if accepted else None
+        record = ClarificationRecord(
+            requirement_id=gap.id,
+            question=question,
+            answer=answer,
+            assessment=assessment,
+            accepted=accepted,
+            decision_reason=failure or "every code-owned admission gate passed",
+            accepted_claim=accepted_claim,
+        )
+        update: dict[str, Any] = {
+            "processed_requirement_ids": [gap.id],
+            "clarification_records": [record],
+            "pending_answer": None,
+            "current_question": None,
+        }
+        if accepted and accepted_claim is not None:
+            clarification = Clarification(
+                requirement_id=gap.id,
+                question=question,
+                answer=answer,
+                accepted_claim=accepted_claim,
+            )
+            update["clarifications"] = [clarification]
+            update["clarification_evidence"] = [
+                clarification_to_evidence(clarification, len(state.get("clarifications", [])) + 1)
+            ]
+        return update
+
+    def generate_final(state: AgentState) -> dict[str, Any]:
+        """One final full-context run over corpus, admitted evidence, round."""
+        update = run_workflow_once(state)
+        update["action_count"] = state.get("action_count", 0) + 1
+        update["stop_reason"] = (
+            STOP_VALID_PACKAGE if update.get("package_valid") else STOP_INVALID_FINAL
+        )
+        if state.get("current_gap") is not None:
+            update["final_note"] = CEILING_NOTE
+        return update
+
+    def invalid(state: AgentState) -> dict[str, Any]:
+        """Terminate without a package, keeping the reason and the errors."""
+        if state.get("stop_reason") == STOP_BUDGET_EXHAUSTED:
+            return {}
+        return {"stop_reason": STOP_INVALID_INITIAL}
 
     builder = StateGraph(AgentState, input_schema=AgentInput)
+    builder.add_node("parse_round", parse_round)
+    builder.add_node("generate_initial", generate_initial)
     builder.add_node("observe", observe)
-    builder.add_node("decide", decide)
-    builder.add_node("authorize", authorize_node)
-    builder.add_node("generate", generate)
     builder.add_node("ask", ask)
-    builder.add_node("finish", finish)
+    builder.add_node("assess_and_admit", assess_and_admit)
+    builder.add_node("generate_final", generate_final)
     builder.add_node("invalid", invalid)
 
-    builder.add_edge(START, "observe")
-    builder.add_edge("observe", "decide")
-    builder.add_edge("decide", "authorize")
+    builder.add_edge(START, "parse_round")
+    builder.add_edge("parse_round", "generate_initial")
+    builder.add_edge("generate_initial", "observe")
     builder.add_conditional_edges(
-        "authorize",
-        route_authorized,
+        "observe",
+        route_after_observation,
         {
-            "generate": "generate",
             "ask": "ask",
-            "finish": "finish",
-            "retry": "decide",
+            "generate_final": "generate_final",
             "invalid": "invalid",
         },
     )
-    builder.add_edge("generate", "observe")
-    builder.add_edge("ask", "observe")
-    builder.add_edge("finish", END)
+    builder.add_edge("ask", "assess_and_admit")
+    builder.add_edge("assess_and_admit", "observe")
+    builder.add_edge("generate_final", END)
     builder.add_edge("invalid", END)
     return builder.compile(checkpointer=checkpointer)
 
@@ -509,15 +553,15 @@ def run_agent(
     model: StructuredModel | None = None,
     extractor: Extractor = extract_requirements,
     matcher: Matcher | None = None,
+    round_text: str = "",
     thread_id: str = "agent",
 ) -> tuple[AgentState, list[dict[str, Any]]]:
     """Run the loop to termination, answering interrupts via the callback.
 
-    The trace is assembled from the streamed node updates rather than stored
-    in state, which keeps state business-and-control data only while still
-    leaving the decision loop the same quality of record the workflow stages
-    leave: every observation, every proposal, every authorization verdict,
-    and the stop reason, in order.
+    The trace is assembled from streamed node updates rather than stored in
+    state: the parsed round or its absence, every queue selection, every
+    interrupt payload, every assessment verdict with its decision reason,
+    both generation events, and the stop reason, in order.
 
     Args:
         job_description: Raw posting text.
@@ -526,10 +570,12 @@ def run_agent(
         ask_callback: Called with (requirement_id, question); returns the
             human's answer.
         settings: Pipeline settings; packaged defaults are used if omitted.
-        output_dir: Where to write artifacts, including ``agent_trace.json``.
+        output_dir: Where to write artifacts, including ``agent_trace.json``
+            and ``clarification_records.json``.
         model: Provider for every model stage.
         extractor: Stage 1 implementation for the inner workflow.
         matcher: Stage 2 implementation for the inner workflow.
+        round_text: Optional freeform description of the upcoming round.
         thread_id: Checkpoint thread identity for interrupt and resume.
 
     Returns:
@@ -547,7 +593,9 @@ def run_agent(
         extractor=extractor,
         matcher=matcher,
         max_agent_actions=settings.max_agent_actions,
+        agent_action_cap=settings.agent_action_cap,
         max_questions_per_run=settings.max_questions_per_run,
+        min_clarification_length=settings.min_clarification_length,
         match_threshold=settings.match_threshold,
         max_matches=settings.max_matches_per_requirement,
         min_requirements=settings.min_requirements,
@@ -560,26 +608,23 @@ def run_agent(
     def record(event: dict[str, Any]) -> list[dict[str, Any]]:
         pending: list[dict[str, Any]] = []
         for node, update in event.items():
-            if node == "observe":
+            if node == "parse_round":
+                parsed = update.get("round_context")
                 trace.append(
                     {
                         "node": node,
-                        "observation": update["observation"].model_dump(mode="json"),
+                        "round": parsed.model_dump(mode="json", exclude_none=True)
+                        if parsed is not None
+                        else None,
                     }
                 )
-            elif node == "decide":
+            elif node == "observe":
+                current = update.get("current_gap")
                 trace.append(
                     {
                         "node": node,
-                        "decision": update["decision"].model_dump(mode="json", exclude_none=True),
-                    }
-                )
-            elif node == "authorize":
-                trace.append(
-                    {
-                        "node": node,
-                        "route": update.get("authorized_route"),
-                        "error": update.get("authorization_error"),
+                        "selected": current.id if current is not None else None,
+                        "question_budget_left": update.get("question_budget_left"),
                         **(
                             {"stop_reason": update["stop_reason"]}
                             if update.get("stop_reason")
@@ -590,7 +635,23 @@ def run_agent(
             elif node == "__interrupt__":
                 pending.extend(item.value for item in update)
                 trace.append({"node": "ask", "interrupt": [item.value for item in update]})
-            elif node in ("generate", "ask", "finish", "invalid"):
+            elif node == "assess_and_admit":
+                entry: dict[str, Any] = {"node": node}
+                records = update.get("clarification_records") or []
+                if records:
+                    entry["record"] = records[0].model_dump(mode="json", exclude_none=True)
+                trace.append(entry)
+            elif node in ("generate_initial", "generate_final"):
+                entry = {
+                    "node": node,
+                    "package_valid": update.get("package_valid"),
+                }
+                if update.get("final_note"):
+                    entry["note"] = update["final_note"]
+                if not update.get("package_valid") and update.get("validation_errors"):
+                    entry["errors"] = update["validation_errors"]
+                trace.append(entry)
+            elif node == "invalid":
                 trace.append({"node": node})
         return pending
 
@@ -598,6 +659,7 @@ def run_agent(
         "job_description": job_description,
         "evidence_source": evidence_source,
         "evidence_format": evidence_format,
+        "round_text": round_text,
     }
     while True:
         pending: list[dict[str, Any]] = []
@@ -618,10 +680,21 @@ def run_agent(
         with open(output_dir / "agent_trace.json", "w", encoding="utf-8") as handle:
             json.dump(trace, handle, indent=2, ensure_ascii=False)
             handle.write("\n")
+        with open(output_dir / "clarification_records.json", "w", encoding="utf-8") as handle:
+            json.dump(
+                [
+                    item.model_dump(mode="json", exclude_none=True)
+                    for item in state.get("clarification_records", [])
+                ],
+                handle,
+                indent=2,
+                ensure_ascii=False,
+            )
+            handle.write("\n")
 
     return state, trace
 
 
-# Module-level compiled graph for local graph tooling; the decide node and the
-# workflow's model stages resolve a provider only when they run.
+# Module-level compiled graph for local graph tooling; model stages resolve a
+# provider only when they run.
 agent_graph = build_agent_graph()
