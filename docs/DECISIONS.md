@@ -77,16 +77,63 @@ wants the offline behaviour chooses it explicitly with the lexical flags.
 
 ## The model only ever proposes
 
-In the decision loop, the model's entire authority is one proposed action per
-cycle, chosen from a set that code derived before the model was consulted.
-Code authorizes, routes, executes, counts the budget down, and stops the run.
-The alternative — letting the model route directly, or letting it decide when
-it is finished — would be less code and fewer round trips. It was rejected
-because authority that lives in one place can be audited in one place: every
-gate is a pure function with a hand-built failing test, and a wrong trajectory
-is debuggable by reading which proposal was rejected and why. The cost is a
-loop that is more machinery than prompt, and a model that can be overruled by
-its own runtime — which is the point.
+In the first decision loop, the model's entire authority was one proposed
+action per cycle, chosen from a set that code derived before the model was
+consulted. Code authorized, routed, executed, counted the budget down, and
+stopped the run. The alternative — letting the model route directly, or
+letting it decide when it was finished — would have been less code and fewer
+round trips. It was rejected because authority that lives in one place can be
+audited in one place: every gate is a pure function with a hand-built failing
+test, and a wrong trajectory is debuggable by reading which proposal was
+rejected and why. The cost was a loop that is more machinery than prompt, and
+a model that can be overruled by its own runtime — which was the point. The
+next entry records where this design went from there.
+
+## The proposal step retired in the second agent iteration
+
+The proposal step is gone. Once the rule became "process every gap exactly
+once in a deterministic order," the next action stopped being a decision and
+became a computable function of the queue and the budgets — and this repo's
+organising principle, autonomy proportional to the decision, applies in both
+directions. A model proposal over what is effectively a one-element action
+set is autonomy theater: it costs a round trip, a retry path and an
+authorization surface to arrive at the answer code already knew. Routing
+returned to pure code.
+
+The model's judgment did not shrink to nothing; it moved to the two questions
+code genuinely cannot answer — what kind of interview round a freeform
+description denotes, and whether a human's answer actually evidences a
+requirement — and both stay behind code-owned gates that its output cannot
+bypass or redirect. The trade, stated plainly: the loop is less "agentic" by
+vocabulary and more trustworthy by construction. A system that consults a
+model only where a model is needed has fewer places to be wrong, and every
+one of them is gated.
+
+## Evidence carries the accepted claim, not the raw answer
+
+An admitted clarification mints evidence whose summary is the claim the
+assessment extracted and the gates approved — never the raw answer. The raw
+answer is not lost: the audit record keeps it, beside the full assessment,
+the verdict and the decision reason. The split is deliberate. An answer is
+whatever a human typed under pressure — hedges, tangents, overstatement; the
+accepted claim is the part that survived a faithfulness rubric and four
+deterministic gates. Matching against the raw answer would let wording that
+was never admitted influence coverage. The cost is that evidence text is one
+step removed from what the human literally said, which is exactly why the
+audit record preserves the original next to what was made of it.
+
+## One regeneration after the queue closes
+
+Answers accumulate; the workflow runs again exactly once, after the last gap
+is processed. The per-answer alternative — regenerate after every admission —
+was rejected: it multiplies cost by the queue length, produces intermediate
+packages nobody reads, and lets early answers shape the context in which
+later gaps are asked about, making the run order-sensitive for no gain. One
+final run gives every admitted claim the same canonical context and bounds
+the whole loop at two workflow invocations. The cost is that the human
+answers all questions against the initial package's picture of the gaps,
+which is acceptable precisely because questions are generated from
+requirements, not from intermediate matching.
 
 ## Clarifications become evidence, not prompt context
 
@@ -104,15 +151,17 @@ patch; incremental update is Layer 3's problem, deliberately.
 
 ## Budgets are settings, not constants
 
-The action budget and the question ceiling live in ``Settings`` beside the
-matching bounds, not as constants in the agent module. They are operational
-limits a deployment should be able to tighten or relax without editing code —
-a cautious run wants one question and four actions; a batch evaluation wants
-zero questions — and putting them beside the other tunables keeps every bound
-the system enforces discoverable in one file. Authorization reads them at
-graph build time; nothing in a prompt can change them. The defaults stay
-deliberately small, because the ceilings are load-bearing: they are what makes
-"bounded" a property of the code rather than a description of intent.
+The action budget, the question ceiling and the clarification length floor
+live in ``Settings`` beside the matching bounds, not as constants in the agent
+module. They are operational limits a deployment should be able to tighten or
+relax without editing code — a cautious run wants one question; a batch
+evaluation wants zero — and putting them beside the other tunables keeps
+every bound the system enforces discoverable in one file. The routing and
+admission code read them at graph build time; nothing in a prompt can change
+them. The defaults follow the queue: every gap once, an action budget derived
+from the queue size under a hard cap. The ceilings are load-bearing either
+way: they are what makes "bounded" a property of the code rather than a
+description of intent.
 
 ## Tracing lives inside the seam, off by default
 
