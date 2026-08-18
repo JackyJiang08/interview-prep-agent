@@ -28,7 +28,7 @@ system concluded rather than how it was produced.
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any, Literal, TypedDict
+from typing import Any, Literal, NotRequired, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
@@ -37,6 +37,7 @@ from ..models import (
     EvidenceItem,
     FocusArea,
     FocusPlan,
+    InterviewRound,
     InterviewStrategy,
     MockQuestion,
     PrepPackage,
@@ -210,6 +211,11 @@ class PrepState(TypedDict, total=False):
     job_description: str
     evidence_source: str
     evidence_format: str
+    # Optional round context. Invariant: it reaches only the preparation
+    # stages (strategy, questions) — extraction and matching never see it,
+    # because round context changes what to emphasize, never what the
+    # candidate can claim.
+    round_context: InterviewRound | None
     # derived source evidence
     evidence: list[EvidenceItem]
     # grounded intermediates
@@ -232,6 +238,7 @@ class PrepInput(TypedDict):
     job_description: str
     evidence_source: str
     evidence_format: str
+    round_context: NotRequired[InterviewRound | None]
 
 
 def build_prep_workflow(
@@ -333,6 +340,7 @@ def build_prep_workflow(
                 state["matches"],
                 state["focus_areas"],
                 resolve_model(),
+                round_context=state.get("round_context"),
             )
         }
 
@@ -343,6 +351,7 @@ def build_prep_workflow(
                 state["matches"],
                 state["strategy"],
                 resolve_model(),
+                round_context=state.get("round_context"),
             )
         }
 

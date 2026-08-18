@@ -14,6 +14,7 @@ from typing import Any
 
 from ..models import (
     FocusArea,
+    InterviewRound,
     InterviewStrategy,
     Requirement,
     RequirementMatch,
@@ -37,9 +38,30 @@ Rules:
   mitigation the candidate can actually do before the interview.
 - The positioning statement is grounded in the supplied matches, not in
   anything imagined about the candidate.
+- When an interview round section is supplied, tailor emphasis and framing to
+  that round. Round context changes what to emphasize, never what the
+  candidate can claim; invent no round details beyond the section.
 
 Return nothing except data conforming to the supplied schema.
 """
+
+
+def _round_section(round_context: InterviewRound | None) -> str:
+    """Render the optional round block appended to preparation prompts.
+
+    Invariant: round context reaches only the preparation stages — strategy
+    and questions. Extraction and matching never see it, because what a
+    posting demands and what the candidate can prove must not vary with who
+    happens to be interviewing.
+    """
+    if round_context is None:
+        return ""
+    payload = {
+        "round_type": round_context.round_type,
+        "interviewer_roles": round_context.interviewer_roles,
+        "focus": round_context.focus,
+    }
+    return f"----- INTERVIEW ROUND -----\n{json.dumps(payload, indent=2, ensure_ascii=False)}\n"
 
 
 def _dump(payload: Any) -> str:
@@ -50,6 +72,7 @@ def build_strategy_prompt(
     requirements: Sequence[Requirement],
     verdicts: Sequence[RequirementMatch],
     focus_areas: Sequence[FocusArea],
+    round_context: InterviewRound | None = None,
 ) -> str:
     """Place the validated state after the instructions, with boundaries."""
     requirement_rows = [
@@ -74,6 +97,7 @@ def build_strategy_prompt(
         f"{_dump(match_rows)}\n"
         "----- FOCUS AREAS -----\n"
         f"{_dump(focus_rows)}\n"
+        f"{_round_section(round_context)}"
     )
 
 
@@ -101,6 +125,7 @@ def build_strategy_with_model(
     verdicts: Sequence[RequirementMatch],
     focus_areas: Sequence[FocusArea],
     model: StructuredModel,
+    round_context: InterviewRound | None = None,
 ) -> InterviewStrategy:
     """Compose the strategy using a provider.
 
@@ -111,6 +136,7 @@ def build_strategy_with_model(
         ProviderError: If the call fails or the response cannot be used.
     """
     payload = model.generate_json(
-        build_strategy_prompt(requirements, verdicts, focus_areas), response_schema()
+        build_strategy_prompt(requirements, verdicts, focus_areas, round_context),
+        response_schema(),
     )
     return parse_strategy(payload)

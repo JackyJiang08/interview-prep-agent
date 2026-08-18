@@ -14,6 +14,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from ..models import (
+    InterviewRound,
     InterviewStrategy,
     MockQuestion,
     MockQuestionList,
@@ -21,6 +22,7 @@ from ..models import (
     RequirementMatch,
 )
 from ..providers import ProviderError, StructuredModel
+from .strategy import _round_section
 
 MIN_QUESTIONS = 8
 MAX_REQUESTED_QUESTIONS = 12
@@ -40,6 +42,9 @@ Rules:
   outline coaches an honest response, never invented experience.
 - Give each question a follow-up probe an interviewer would plausibly ask,
   and at least two concise answer-outline points.
+- When an interview round section is supplied, weight the questions toward
+  that round's type and focus. Round context changes what to emphasize,
+  never what the candidate can claim.
 
 Return nothing except data conforming to the supplied schema.
 """
@@ -53,6 +58,7 @@ def build_question_prompt(
     requirements: Sequence[Requirement],
     verdicts: Sequence[RequirementMatch],
     strategy: InterviewStrategy,
+    round_context: InterviewRound | None = None,
 ) -> str:
     """Place the validated state after the instructions, with boundaries."""
     requirement_rows = [{"requirement_id": r.id, "requirement": r.text} for r in requirements]
@@ -72,6 +78,7 @@ def build_question_prompt(
         f"{_dump(match_rows)}\n"
         "----- STRATEGY -----\n"
         f"{_dump(strategy.model_dump(mode='json'))}\n"
+        f"{_round_section(round_context)}"
     )
 
 
@@ -99,6 +106,7 @@ def generate_questions_with_model(
     verdicts: Sequence[RequirementMatch],
     strategy: InterviewStrategy,
     model: StructuredModel,
+    round_context: InterviewRound | None = None,
 ) -> list[MockQuestion]:
     """Generate practice questions using a provider.
 
@@ -106,6 +114,7 @@ def generate_questions_with_model(
         ProviderError: If the call fails or the response cannot be used.
     """
     payload = model.generate_json(
-        build_question_prompt(requirements, verdicts, strategy), response_schema()
+        build_question_prompt(requirements, verdicts, strategy, round_context),
+        response_schema(),
     )
     return parse_questions(payload)
