@@ -7,11 +7,11 @@
 Turns a job posting plus attested experience — a YAML corpus or a markdown
 resume — into a validated interview preparation package. Every claim cites
 the source that justifies it, so a wrong answer is a wrong link a reader can
-find and reject. It runs as a bounded human-in-the-loop agent: each cycle the
-model proposes one action from a code-derived allowed set, and deterministic
-gates authorize, route and stop — a human is pulled in for exactly the
-evidence that is missing, and the answer is minted as citable evidence, never
-loose prompt context.
+find and reject. The loop processes every evidence gap exactly once in a
+deterministic order, admitting each answer through a model assessment plus a
+code-owned gate — rejected answers are recorded in the audit trail, never
+matched — and tailors strategy and questions to the stated next interview
+round. Models advise; deterministic gates admit.
 
 ## Status
 
@@ -21,7 +21,7 @@ loose prompt context.
 | [Model-backed extraction](docs/METHODOLOGY.md#stage-1---extraction) — behind a provider seam, output never trusted raw | **shipped** |
 | [Model-backed matching](docs/METHODOLOGY.md#stage-2---matching) — same seam, FULL/PARTIAL/GAP coverage; lexical stays the default | **shipped** |
 | [Preparation package](docs/METHODOLOGY.md#stages-3-5---assessment-strategy-questions) — gap assessment, strategy, questions, package gate with a routed error branch | **shipped** |
-| [Bounded decision layer](docs/ARCHITECTURE.md#layer-2--bounded-decision-layer--shipped-unevaluated) — observe, propose, authorize; one human question per run, gate-checked at every step | **shipped — unevaluated** |
+| [Governed evidence loop](docs/ARCHITECTURE.md#layer-2--bounded-decision-layer--shipped-unevaluated) — every gap asked once, code-owned admission gate, round-aware regeneration | **shipped — unevaluated** |
 | [Durable state](docs/ARCHITECTURE.md#layer-3--durable-state--planned) — same-thread resume already persists within a run; state across runs remains planned | planned |
 | [Evaluation set + failure analysis](docs/ARCHITECTURE.md#cross-cutting--traces-evaluation-failure-analysis--planned) — gates most other work | planned |
 
@@ -82,13 +82,21 @@ interview-prep-agent agent \
   --evidence examples/sample_evidence.yaml --out out/
 ```
 
-When evidence is missing on a high-importance requirement, the run pauses to
-ask one focused factual question and resumes with the answer minted as citable
-`CL-` evidence; `agent_trace.json` records every proposal and verdict.
+The run pauses once per evidence gap with a focused factual question; each
+answer is assessed and gate-checked, and only the admitted claim becomes
+citable `CL-` evidence. `agent_trace.json` and `clarification_records.json`
+record every selection, verdict and reason. Optionally describe the upcoming
+round — it tailors strategy and questions, never matching:
+
+```bash
+interview-prep-agent agent --round "Technical screen with the data lead" \
+  --jd examples/sample_job_description.txt \
+  --evidence examples/sample_evidence.yaml --out out/
+```
 
 ## Current state
 
-Works today, covered by 123 tests:
+Works today, covered by 124 tests:
 
 * Requirement extraction from list-formatted postings, wording preserved
 * Model-backed extraction and matching behind one provider seam, output
@@ -99,10 +107,12 @@ Works today, covered by 123 tests:
   stable-identifier chain by the package gate
 * Package validation routing failures to an error report — a run that fails
   its gate ends with errors listed and no package artifact
-* The bounded decision loop (`agent`): code-derived allowed actions, one
-  model proposal per cycle, every gate applied by code, budgets from settings
-* An interactive interrupt whose answer becomes first-class `CL-` evidence,
-  with `agent_trace.json` recording each observation, proposal and verdict
+* The governed evidence loop (`agent`): every gap asked exactly once in a
+  deterministic order, budgets from settings, routing in pure code
+* Per-answer assessment behind a code-owned admission gate — admitted claims
+  become citable `CL-` evidence, rejected answers stay in the audit trail
+* Optional round context parsed once and threaded into preparation only,
+  with `agent_trace.json` and `clarification_records.json` as the record
 * Evidence from a YAML corpus or a markdown resume, identifiers minted once
   at the boundary
 * Per-stage JSON artifacts, the `match`, `prep` and `agent` commands,
@@ -117,9 +127,13 @@ Known limitations, in order of how much they cost:
   *right* has never been scored against labelled data. Neither path can honestly
   be called better yet; that claim needs the evaluation set, which is planned.
 * **The agent loop is a capability, not a proven improvement.** It works and
-  is gate-authorized at every step, but nothing yet measures whether the
+  is gate-checked at every step, but nothing yet measures whether the
   packages it produces are better than a plain workflow run; that comparison
   needs the evaluation set, which is planned.
+* **Round parsing and answer assessment are unmeasured model stages.** Both
+  sit behind code-owned gates — a bad parse can only mis-emphasize, and a bad
+  assessment can only reject or admit a claim the gates then bound — but
+  whether their judgments are right is unscored, like every model stage here.
 * **Model extraction is unmeasured.** Same shape: it reads prose the splitter
   cannot, its quotes are verified real, and its judgment is unscored.
 * **The threshold is unvalidated.** `0.30` was set by inspecting one synthetic
