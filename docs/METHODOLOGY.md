@@ -200,52 +200,63 @@ structural breakage and broken reference chains. They cannot catch output that
 is structurally valid and semantically wrong — only the evaluation set does
 that.
 
-## The decision layer
+## The governed evidence loop
 
-The loop around the workflow moves control to a model at exactly one point —
-which allowed action comes next — and the method is the same three-part
-discipline as every other stage: derive deterministically, propose against a
-schema, judge in code.
+The loop around the workflow consults a model at exactly two points — parsing
+an optional round description, and assessing whether an answer evidences a
+requirement — and both outputs face code-owned gates. Everything else,
+including what happens next, is computed.
 
-**Observation.** Pure code compresses the run into a factual snapshot: whether
-a package exists and whether it is valid, the high-priority gaps (verdicts at
-GAP coverage whose requirement carries importance of 4 or 5, sorted by
-importance descending then identifier — a requirement without importance never
-qualifies, because interrupting a human on a guess is not a judgment code is
-entitled to make), which requirements have been asked, the latest answer, the
-last action, and the steps remaining.
+**The queue.** Gaps are processed exactly once each, in a deterministic
+order: verdicts at GAP coverage whose requirement is known and not yet
+processed, sorted by importance descending (missing importance sorts last)
+then requirement identifier ascending. Processed means asked once, not
+resolved — a rejected answer does not requeue its requirement. Routing is a
+pure function: an invalid initial package stops the run; a current gap with
+question budget remaining goes to the interrupt; an exhausted ceiling with
+gaps remaining proceeds to final generation, noted in the trace; an empty
+queue proceeds to final generation.
 
-**Allowed actions**, derived in order, first rule wins:
+**The question** is built by code from the requirement's own text — one
+specific example, the method, the result — so what the human is asked never
+depends on a model.
 
-1. budget exhausted → nothing
-2. nothing generated yet → `GENERATE_PREP_PACKAGE`
-3. just resumed from `ASK_USER` with an answer in hand → `GENERATE_PREP_PACKAGE`
-4. an eligible unasked gap and question budget left → `ASK_USER`
-5. a valid package → `FINISH`
-6. otherwise → `GENERATE_PREP_PACKAGE`
+**Admission gates**, applied in order of cheapness and trust to each resumed
+answer after one short-context model assessment (target requirement, question
+and answer only — the assessor never sees the wider run):
 
-**Authorization gates**, applied by code to the one proposed action:
+1. the stripped answer meets the length floor
+   (``min_clarification_length``, default 24) — checked before any model
+   judgment is consulted
+2. the assessment's target equals the requirement actually asked — model
+   output cannot redirect evidence
+3. the assessment's verdict is valid
+4. the accepted claim is non-empty after stripping
 
-* the action budget must not be exhausted
-* the action must be in the derived allowed set
-* `ASK_USER` must carry a question and a target; the target must be an
-  eligible high-priority gap, never one already asked, and within the
-  question ceiling
-* `FINISH` requires a valid package and no eligible unasked gap
+**Accepted claim as evidence.** An admitted answer mints a ``CL-`` evidence
+item whose summary is the accepted claim — the faithful restatement that
+survived the rubric and the gates — never the raw answer, so wording that was
+not admitted cannot influence matching. Provenance carries the requirement
+addressed and the question asked.
 
-A rejected proposal is retried once with the rejection text in the next
-prompt; a second rejection stops the run with `invalid_decision`. An empty
-budget stops immediately with `action_budget_exhausted` — a retry cannot
-refill it. A completed run stops with `valid_package_complete`.
+**The audit record.** Every processed gap appends one record, admitted or
+not: requirement identifier, question, raw answer, the full assessment
+(target, verdict, relevance and specificity reasons, claim), the accepted
+flag, the decision reason, and the accepted claim when admitted. The records
+land in ``clarification_records.json`` beside the stage artifacts; the raw
+answer lives here, in the audit trail, not in evidence.
 
-**Clarifications as evidence.** A human answer at an interrupt is normalized
-into a first-class evidence item in its own `CL-` identifier series
-(`CL-001`, `CL-002`, …), carrying the answer as its summary and, as
-provenance, the requirement it addresses and the question that was asked.
-Regeneration serializes the enlarged corpus back to the canonical form and
-passes it through the unchanged workflow, so a match citing a clarification
-cites an identifier that resolves like any other — the traceability guarantee
-extends through the human in the loop rather than around them.
+**Round context.** Optional freeform text about the upcoming round is parsed
+once, before the initial generation, into a structured context (type, format,
+interviewer roles, focus, notes — all optional; absent text means none and
+general-purpose preparation). It threads into the strategy and question
+prompts only. The invariant: round context changes what to emphasize, never
+what the candidate can claim — extraction and matching never see it, and the
+matches are identical with and without one.
+
+**Two generations.** The workflow runs once before the queue opens and once
+after it closes, over the original corpus plus every admitted claim plus the
+round context. No regeneration happens between answers.
 
 ## Evaluation
 

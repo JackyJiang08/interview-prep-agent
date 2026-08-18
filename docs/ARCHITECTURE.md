@@ -90,30 +90,42 @@ the candidate is cheap and high value, but asking about everything is
 worthless, so *which* gap to raise depends on what the run currently looks
 like. That decision is now real and the loop is built around it.
 
-**Mechanics, as built.** The loop is observe → decide → authorize, with every
+**Mechanics, as built: a governed evidence loop.** One initial workflow run,
+a deterministic pass over every gap, one final regeneration — with every
 branch target fixed at build time:
 
-* **Observation compression.** Pure code derives a factual snapshot — package
-  state, high-priority gaps (GAP coverage, importance ≥ 4, sorted), what has
-  been asked, budget remaining — and the *allowed* action set. The model sees
-  this snapshot and nothing else.
-* **Proposal.** One structured-output call returns exactly one action from
-  `ASK_USER | GENERATE_PREP_PACKAGE | FINISH` with a one-sentence reason.
-  Only the validated decision enters state; that proposal is the model's
-  entire authority.
-* **Authorization.** Code applies every gate — action budget, allowed set,
-  ask eligibility and non-repetition, the question ceiling, finish
-  preconditions — and computes the route the conditional edge maps. An
-  invalid proposal is retried once with the rejection fed back, then the run
-  stops with `invalid_decision`; an exhausted budget stops without retry
-  (`action_budget_exhausted`), because a retry cannot refill it; a completed
-  run stops with `valid_package_complete`.
-* **The human capability.** `ASK_USER` interrupts with the requirement and
-  one focused factual question. The answer is minted as a first-class `CL-`
-  evidence item and regeneration passes the enlarged corpus through the
-  unchanged workflow, so the traceability guarantee survives the human in
-  the loop. Budgets — actions and questions — are settings enforced by
-  authorization, not suggestions in a prompt.
+* **The queue.** Pure code selects the next gap: coverage GAP, requirement
+  known, not yet processed, sorted by importance descending (missing
+  importance last) then identifier. Processed means asked once, not
+  resolved. Every gap is asked about exactly once, in an order a reader can
+  recompute.
+* **The retired proposal step.** The first iteration of this layer had the
+  model propose each action from a code-derived allowed set. That step is
+  gone: once every gap is processed exactly once in a fixed order, the next
+  action is a computable function, and a model proposal over a one-element
+  set is autonomy theater — cost without a decision. Routing is pure code;
+  the model's judgment moved to the two questions code cannot answer, both
+  behind gates (see `DECISIONS.md`).
+* **The interrupt and the admission gate.** Each gap raises one focused
+  factual question, built by code. The resumed answer faces one
+  short-context model assessment — advice, not admission — and then the
+  code-owned gate: a length floor checked before any model judgment, target
+  identity so model output cannot redirect evidence, the assessment's
+  verdict, and a non-empty admitted claim. Admitted answers mint `CL-`
+  evidence whose summary is the admitted claim, never the raw answer;
+  rejected answers change audit state only and the requirement stays a gap.
+  Every processed gap leaves one audit record either way.
+* **Round context, preparation-only.** Optional freeform text about the next
+  round is parsed once, before any generation, into a structured context
+  that reaches only the strategy and question prompts. The invariant:
+  round context changes what to emphasize, never what the candidate can
+  claim — extraction and matching never see it.
+* **One final regeneration.** After the queue closes — or the question
+  ceiling ends it early, noted in the trace — the workflow runs once more
+  over the original corpus plus every admitted claim plus the round context.
+  Two workflow invocations bound the whole run; budgets are settings
+  enforced by code, and exhaustion terminates with its own stop reason,
+  never an exception.
 
 **Boundary.** The hard constraint holds: the loop may add evidence and
 regenerate, but it may not rewrite the verbatim requirement text carried up
@@ -123,18 +135,20 @@ inherits it unchanged.
 **Ship criteria: two of three met.** The bar this document set was a real
 tool with a defined failure mode, traces good enough to debug a wrong
 trajectory, and an evaluation set showing the loop does not degrade Layer 1.
-The interrupt capability is that tool — its failure modes (no answer path,
+The interrupt capability is that tool — its failure modes (rejected answers,
 repeated targets, budget exhaustion) are defined and tested — and
-`agent_trace.json` records every observation, proposal, authorization verdict
-and stop reason in order. The evaluation set does not exist. That criterion
+`agent_trace.json` records the parsed round, every queue selection, every
+interrupt payload, every assessment verdict with its decision reason, both
+generation events and the stop reason, in order, with the full audit trail
+beside it in `clarification_records.json`. The evaluation set does not exist. That criterion
 is not weakened by the other two being met: until packages produced with the
 loop are measured against plain workflow runs, this layer is a capability,
 not a proven improvement, and it is not called done here.
 
 **What Layer 3 still owes.** State across runs — a thread survives its own
-interrupts, but nothing survives the process — and feedback rounds beyond a
-single question: the tool-results and post-interview decisions anticipated
-above remain unbuilt, and both belong to durable state.
+interrupts, but nothing survives the process — and feedback rounds beyond the
+single clarification pass: the tool-results and post-interview decisions
+anticipated above remain unbuilt, and both belong to durable state.
 
 ## Layer 3 — durable state · planned
 
