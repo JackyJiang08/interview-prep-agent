@@ -288,66 +288,66 @@ class FocusPlan(BaseModel):
     method: str
 
 
-class AgentAction(StrEnum):
-    """The complete set of actions the decision loop can ever take."""
-
-    ASK_USER = "ASK_USER"
-    GENERATE_PREP_PACKAGE = "GENERATE_PREP_PACKAGE"
-    FINISH = "FINISH"
-
-
 class Clarification(BaseModel):
-    """One factual answer a human supplied at an interrupt."""
+    """One factual answer a human supplied at an interrupt.
+
+    ``accepted_claim`` is the code-admitted restatement of the answer; when
+    present it is what becomes evidence, so nothing stronger than what the
+    admission gate approved can ever be cited.
+    """
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     requirement_id: str = Field(pattern=r"^REQ-\d{3,}$")
     question: str = Field(min_length=1)
     answer: str = Field(min_length=1)
+    accepted_claim: str | None = None
 
 
-class HighPriorityGap(BaseModel):
-    """Decision context for one unresolved gap worth interrupting a human for."""
+class InterviewRound(BaseModel):
+    """Structured context parsed from optional freeform round text.
+
+    Every field is optional or defaulted: the parse extracts only what the
+    text states, and an absent description simply means general-purpose
+    preparation. Round context influences preparation only — it changes what
+    to emphasize, never what the candidate can claim.
+    """
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    round_type: str | None = None
+    format: str | None = None
+    interviewer_roles: list[str] = Field(default_factory=list)
+    focus: list[str] = Field(default_factory=list)
+    notes: str | None = None
+
+
+class ClarificationAssessment(BaseModel):
+    """The model's structured advice about one resumed answer.
+
+    Advice, not admission: the code-owned gate decides what becomes evidence,
+    and it checks this assessment's target against the requirement actually
+    asked, so model output cannot redirect evidence.
+    """
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    target_requirement_id: str = Field(pattern=r"^REQ-\d{3,}$")
+    is_valid: bool
+    relevance_reason: str = Field(min_length=1)
+    specificity_reason: str = Field(min_length=1)
+    accepted_claim: str | None = None
+
+
+class ClarificationRecord(BaseModel):
+    """The auditable outcome for one processed gap, admitted or not."""
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     requirement_id: str = Field(pattern=r"^REQ-\d{3,}$")
-    text: str = Field(min_length=1)
-    importance: int = Field(ge=4, le=5)
-    explanation: str = Field(min_length=1)
-
-
-class AgentObservation(BaseModel):
-    """A factual snapshot of the run, and the only thing the model is shown.
-
-    Every field is derived deterministically from business state; nothing here
-    is hidden reasoning, and the allowed actions are computed by code before
-    the model is consulted.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    package_generated: bool
-    package_valid: bool
-    high_priority_gap_ids: list[str] = Field(default_factory=list)
-    high_priority_gaps: list[HighPriorityGap] = Field(default_factory=list)
-    asked_requirement_ids: list[str] = Field(default_factory=list)
-    allowed_actions: list[AgentAction] = Field(default_factory=list)
-    latest_clarification: str | None = None
-    last_action: AgentAction | None = None
-    steps_remaining: int = Field(ge=0)
-
-
-class AgentDecision(BaseModel):
-    """Exactly one model-proposed action, awaiting code-owned authorization.
-
-    Doubles as the response schema for the decide stage. The proposal is the
-    model's entire authority: code authorizes, routes, executes and stops.
-    """
-
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-
-    next_action: AgentAction
-    target_requirement_id: str | None = Field(default=None, pattern=r"^REQ-\d{3,}$")
-    question: str | None = None
-    reason_summary: str = Field(min_length=1)
+    question: str = Field(min_length=1)
+    answer: str
+    assessment: ClarificationAssessment
+    accepted: bool
+    decision_reason: str = Field(min_length=1)
+    accepted_claim: str | None = None

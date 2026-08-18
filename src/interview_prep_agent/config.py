@@ -38,12 +38,17 @@ class Settings(BaseModel):
     min_requirements: int = Field(default=1, ge=0)
     max_requirements: int = Field(default=50, ge=1)
 
-    # Bounds on the decision loop. The action budget caps how many actions a
-    # run may take before it is stopped by code; the question budget caps how
-    # many times it may interrupt a human. Both are hard ceilings enforced by
-    # authorization, not suggestions in a prompt.
-    max_agent_actions: int = Field(default=4, ge=1)
-    max_questions_per_run: int = Field(default=1, ge=0)
+    # Bounds on the decision loop, enforced by code rather than suggested in
+    # a prompt. The question ceiling is optional: None means every gap is
+    # asked about exactly once. The action budget defaults to the size of the
+    # gap queue plus the two generation runs, and is always clamped by the
+    # hard cap — a backstop against a loop that cycles, not an opinion about
+    # how long a run should be. Answers shorter than the clarification floor
+    # are rejected in code before any model judgment is consulted.
+    max_agent_actions: int | None = Field(default=None, ge=1)
+    agent_action_cap: int = Field(default=32, ge=1)
+    max_questions_per_run: int | None = Field(default=None, ge=0)
+    min_clarification_length: int = Field(default=24, ge=0)
 
 
 def load_settings(path: Path | None = None) -> Settings:

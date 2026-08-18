@@ -143,7 +143,10 @@ def clarification_to_evidence(clarification: Clarification, index: int) -> Evide
     """
     return EvidenceItem(
         id=f"CL-{index:03d}",
-        summary=clarification.answer,
+        # The admitted claim, when present, is the summary: nothing stronger
+        # than what the admission gate approved can be cited. The raw answer
+        # stands in only for clarifications that never passed through a gate.
+        summary=clarification.accepted_claim or clarification.answer,
         source="clarification",
         addresses_requirement_id=clarification.requirement_id,
         question=clarification.question,
