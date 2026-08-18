@@ -138,6 +138,18 @@ def build_parser() -> argparse.ArgumentParser:
         default=LEXICAL,
         help="evidence matching path (default: lexical)",
     )
+    round_group = agent.add_mutually_exclusive_group()
+    round_group.add_argument(
+        "--round",
+        default=None,
+        help="freeform description of the upcoming interview round",
+    )
+    round_group.add_argument(
+        "--round-file",
+        type=Path,
+        default=None,
+        help="file containing the round description",
+    )
     agent.set_defaults(handler=run_agent_command)
 
     return parser
@@ -253,9 +265,12 @@ def run_agent_command(args: argparse.Namespace) -> int:
         evidence_format = (
             "markdown" if Path(args.evidence).suffix.lower() in (".md", ".markdown") else "corpus"
         )
+        round_text = args.round or ""
+        if args.round_file is not None:
+            round_text = Path(args.round_file).read_text(encoding="utf-8")
         settings = load_settings(args.config)
-        # The decide stage always calls a provider, so the key is required up
-        # front rather than failing one observation in.
+        # The workflow's preparation stages and the answer assessment always
+        # call a provider, so the key is required up front.
         model = build_model()
         state, _trace = run_agent(
             job_description,
@@ -267,6 +282,7 @@ def run_agent_command(args: argparse.Namespace) -> int:
             model=model,
             extractor=_resolve_extractor(args.extractor, model),
             matcher=_resolve_matcher(args.matcher, model),
+            round_text=round_text,
         )
     except (CorpusError, ProviderError, QualityGateError, OSError) as error:
         print(f"error: {error}", file=sys.stderr)
