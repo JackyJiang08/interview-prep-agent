@@ -1,0 +1,22 @@
+# Synthetic corpus fixture covering every requirement of the sample posting,
+# so a run over the "complete" profile interrupts for nothing. Invented for
+# the behavior suite; it describes no real person.
+
+- id: EV-001
+  summary: Owned SQL and Python analysis on large datasets for a subscription product
+  skills: [sql, python, analysis, large datasets]
+- id: EV-002
+  summary: Designing and interpreting A/B tests for the growth funnel each quarter
+  skills: [a/b tests, experiment design]
+- id: EV-003
+  summary: Built and maintained ETL pipelines in a cloud data warehouse
+  skills: [etl, pipelines, cloud data warehouse]
+- id: EV-004
+  summary: Communicate findings to cross-functional product and engineering partners weekly
+  skills: [communication, stakeholders]
+- id: EV-005
+  summary: Familiarity with Kubernetes and service mesh operations in production
+  skills: [kubernetes, service mesh, operations]
+- id: EV-006
+  summary: Applied causal inference methods such as difference in differences analysis
+  skills: [causal inference, econometrics]
