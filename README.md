@@ -21,9 +21,10 @@ round. Models advise; deterministic gates admit.
 | [Model-backed extraction](docs/METHODOLOGY.md#stage-1---extraction) — behind a provider seam, output never trusted raw | **shipped** |
 | [Model-backed matching](docs/METHODOLOGY.md#stage-2---matching) — same seam, FULL/PARTIAL/GAP coverage; lexical stays the default | **shipped** |
 | [Preparation package](docs/METHODOLOGY.md#stages-3-5---assessment-strategy-questions) — gap assessment, strategy, questions, package gate with a routed error branch | **shipped** |
-| [Governed evidence loop](docs/ARCHITECTURE.md#layer-2--bounded-decision-layer--shipped-unevaluated) — every gap asked once, code-owned admission gate, round-aware regeneration | **shipped — unevaluated** |
+| [Governed evidence loop](docs/ARCHITECTURE.md#layer-2--bounded-decision-layer--shipped) — every gap asked once, code-owned admission gate, round-aware regeneration | **shipped — behavior locked by the regression suite** |
+| [Regression evaluation](docs/METHODOLOGY.md#evaluation) — scenario suite scoring trajectory, state and outcome; CI-enforced | **shipped** |
 | [Durable state](docs/ARCHITECTURE.md#layer-3--durable-state--planned) — same-thread resume already persists within a run; state across runs remains planned | planned |
-| [Evaluation set + failure analysis](docs/ARCHITECTURE.md#cross-cutting--traces-evaluation-failure-analysis--planned) — gates most other work | planned |
+| [Quality evaluation](docs/ARCHITECTURE.md#cross-cutting--two-tracks) — scoring against labelled reference data; gates every "is it better?" claim | planned |
 
 ## Quickstart
 
@@ -35,8 +36,7 @@ pip install -r requirements.txt
 
 PYTHONPATH=src python -m interview_prep_agent.cli match \
   --jd examples/sample_job_description.txt \
-  --evidence examples/sample_evidence.yaml \
-  --out out/
+  --evidence examples/sample_evidence.yaml --out out/
 ```
 
 Runs offline on the committed synthetic example, no configuration or key:
@@ -51,72 +51,43 @@ Coverage: 6 requirements | 3 PROOF | 3 GAP
 
 With `--out`, each stage writes a JSON artifact; one committed run lives in
 [`examples/trace/`](examples/trace/). Your own inputs are described in
-[`data/README.md`](data/README.md). Tests and lint: `pip install -r
-requirements-dev.txt && pytest && ruff check .`
+[`data/README.md`](data/README.md). Tests, lint, and the behavior matrix:
+`pip install -r requirements-dev.txt && pytest && ruff check .` and
+`interview-prep-agent eval --suite offline --local`.
 
-`--extractor llm` reads prose postings; `--matcher llm` grades coverage as
-FULL, PARTIAL or GAP instead of the lexical binary. Both need a key and fail
-immediately without one; the defaults never do. The full workflow — strategy,
-practice questions, and a validated package — is the `prep` command, whose
-strategy and question stages always call a provider:
-
-```bash
-export GEMINI_API_KEY=your-key
-export GEMINI_MODEL=gemini-3.5-flash-lite   # optional
-
-interview-prep-agent prep \
-  --jd examples/sample_job_description.txt \
-  --evidence examples/sample_evidence.yaml --out out/
-```
-
-`--evidence` also accepts a markdown resume (`.md`); its bullets become the
-evidence corpus. Optional tracing: set `LANGSMITH_TRACING=true` plus a key to
-trace provider calls and graph runs — traced runs upload inputs and outputs,
-so use synthetic data, never a real posting or resume.
-
-The decision loop is the `agent` command, same variables:
+The other commands share the same `--jd`/`--evidence` arguments and need a
+key (`export GEMINI_API_KEY=...`; `GEMINI_MODEL` optional). `--extractor llm`
+reads prose postings; `--matcher llm` grades FULL/PARTIAL/GAP; `--evidence`
+also accepts a markdown resume whose bullets become the corpus:
 
 ```bash
-interview-prep-agent agent \
-  --jd examples/sample_job_description.txt \
-  --evidence examples/sample_evidence.yaml --out out/
+interview-prep-agent prep  --jd ... --evidence ... --out out/
+interview-prep-agent agent --jd ... --evidence ... --out out/ \
+  --round "Technical screen with the data lead"   # optional round context
 ```
 
-The run pauses once per evidence gap with a focused factual question; each
-answer is assessed and gate-checked, and only the admitted claim becomes
-citable `CL-` evidence. `agent_trace.json` and `clarification_records.json`
-record every selection, verdict and reason. Optionally describe the upcoming
-round — it tailors strategy and questions, never matching:
-
-```bash
-interview-prep-agent agent --round "Technical screen with the data lead" \
-  --jd examples/sample_job_description.txt \
-  --evidence examples/sample_evidence.yaml --out out/
-```
+`prep` runs the full workflow to a validated package. `agent` adds the loop:
+it pauses once per evidence gap with a focused factual question; each answer
+is assessed and gate-checked, and only the admitted claim becomes citable
+`CL-` evidence — `agent_trace.json` and `clarification_records.json` record
+every selection, verdict and reason. The round context tailors strategy and
+questions, never matching. Optional tracing: `LANGSMITH_TRACING=true` plus a
+key; traced runs upload inputs and outputs, so use synthetic data only.
 
 ## Current state
 
-Works today, covered by 124 tests:
+Works today, covered by 139 tests:
 
 * Requirement extraction from list-formatted postings, wording preserved
-* Model-backed extraction and matching behind one provider seam, output
-  schema-validated and gate-checked, never trusted raw
-* Coverage grading (FULL / PARTIAL / GAP) with deterministic,
-  importance-weighted focus areas ordering the preparation
-* Strategy and practice-question generation, every reference held to the
-  stable-identifier chain by the package gate
-* Package validation routing failures to an error report — a run that fails
-  its gate ends with errors listed and no package artifact
-* The governed evidence loop (`agent`): every gap asked exactly once in a
-  deterministic order, budgets from settings, routing in pure code
-* Per-answer assessment behind a code-owned admission gate — admitted claims
-  become citable `CL-` evidence, rejected answers stay in the audit trail
-* Optional round context parsed once and threaded into preparation only,
-  with `agent_trace.json` and `clarification_records.json` as the record
-* Evidence from a YAML corpus or a markdown resume, identifiers minted once
-  at the boundary
-* Per-stage JSON artifacts, the `match`, `prep` and `agent` commands,
-  settings from `--config`, then `IPA_CONFIG`, then the packaged default
+* Model-backed extraction and matching behind one provider seam, never trusted raw
+* Coverage grading (FULL / PARTIAL / GAP) with importance-weighted focus areas
+* Strategy and question generation held to the identifier chain by the package gate
+* Package validation routing failures to an error report, never a silent artifact
+* The governed evidence loop: every gap asked once, budgets from settings, pure-code routing
+* A code-owned admission gate; admitted claims become `CL-` evidence, rejections stay audit-only
+* Round context parsed once, threaded into preparation only
+* A behavioral regression suite — trajectory, state, outcome — run by CI, red fails the build
+* Evidence from a YAML corpus or markdown resume; `match`, `prep`, `agent`, `eval` commands
 
 Known limitations, in order of how much they cost:
 
@@ -125,11 +96,11 @@ Known limitations, in order of how much they cost:
   testing" — false gaps remain its dominant error. The model matcher exists to
   close that, and its grounding is gate-checked, but whether its judgments are
   *right* has never been scored against labelled data. Neither path can honestly
-  be called better yet; that claim needs the evaluation set, which is planned.
-* **The agent loop is a capability, not a proven improvement.** It works and
-  is gate-checked at every step, but nothing yet measures whether the
-  packages it produces are better than a plain workflow run; that comparison
-  needs the evaluation set, which is planned.
+  be called better yet; that claim needs the quality evaluation, which is planned.
+* **The agent loop's quality is unmeasured.** Its trajectory and state behavior
+  are now regression-locked — a silent change fails the build — but nothing yet
+  measures whether the packages it produces are better than a plain workflow
+  run; that comparison needs the quality evaluation, which is planned.
 * **Round parsing and answer assessment are unmeasured model stages.** Both
   sit behind code-owned gates — a bad parse can only mis-emphasize, and a bad
   assessment can only reject or admit a claim the gates then bound — but
@@ -156,8 +127,10 @@ loudly — output that violates a stated guarantee is not returned at all.
 
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — the layers, their interfaces,
 ship criteria · [`docs/METHODOLOGY.md`](docs/METHODOLOGY.md) — extraction
-paths, scoring formula, gates · [`docs/DECISIONS.md`](docs/DECISIONS.md) —
-choices and their costs
+paths, scoring formula, gates, evaluation ·
+[`docs/DECISIONS.md`](docs/DECISIONS.md) — choices and their costs ·
+[`docs/FAILURE-ANALYSIS.md`](docs/FAILURE-ANALYSIS.md) — a deliberate
+regression, caught and recorded
 
 References: Spärck Jones (1972) on term specificity; Robertson & Zaragoza
 (2009) on BM25, deliberately not used — full citations in
