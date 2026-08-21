@@ -152,6 +152,34 @@ def build_parser() -> argparse.ArgumentParser:
     )
     agent.set_defaults(handler=run_agent_command)
 
+    evaluation = subcommands.add_parser(
+        "eval",
+        help="run the behavioral regression suites",
+        description=(
+            "Run the behavioral regression suites: scenario datasets with "
+            "frozen trajectories, state deltas and outcomes, scored against "
+            "the real compiled agent graph. This proves behavior did not "
+            "silently change; it does not measure output quality."
+        ),
+    )
+    evaluation.add_argument(
+        "--suite",
+        choices=("offline", "live"),
+        required=True,
+        help="offline runs fixture providers; live calls the real provider",
+    )
+    evaluation.add_argument(
+        "--experiment",
+        default=None,
+        help="experiment prefix for a remote run; defaults to the suite name",
+    )
+    evaluation.add_argument(
+        "--local",
+        action="store_true",
+        help="print the scenario matrix locally without any remote experiment",
+    )
+    evaluation.set_defaults(handler=run_eval_command)
+
     return parser
 
 
@@ -303,6 +331,28 @@ def run_agent_command(args: argparse.Namespace) -> int:
     if args.out is not None:
         print(f"Artifacts written to {args.out}", file=sys.stderr)
     return 0 if state.get("stop_reason") == "valid_package_complete" else 1
+
+
+def run_eval_command(args: argparse.Namespace) -> int:
+    """Handle the ``eval`` subcommand."""
+    if args.local and args.suite != "offline":
+        print("error: --local is supported only by the offline suite", file=sys.stderr)
+        return 2
+
+    # Imported lazily: the suites need agentevals, which is a development
+    # dependency, and the remote path needs credentials the offline one never
+    # touches.
+    from .evals import runner
+
+    try:
+        if args.local:
+            all_green = runner.run_local(args.suite)
+        else:
+            all_green = runner.run_remote(args.suite, args.experiment or args.suite)
+    except (ProviderError, RuntimeError, ValueError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+    return 0 if all_green else 1
 
 
 def main(argv: list[str] | None = None) -> int:

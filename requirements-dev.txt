@@ -8,3 +8,5 @@ ruff==0.16.1
 # the default offline paths.
 langsmith==0.10.16
 langgraph-cli==0.4.31
+# Behavioral regression suites: trajectory matching for the offline matrix.
+agentevals==0.0.9
