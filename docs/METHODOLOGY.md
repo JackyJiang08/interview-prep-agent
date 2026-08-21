@@ -260,12 +260,48 @@ round context. No regeneration happens between answers.
 
 ## Evaluation
 
-There is none yet, beyond the smoke tests. Reporting a coverage number over a
-single synthetic posting would say nothing about accuracy on real ones. A useful
-evaluation needs a set of real postings with hand-labelled PROOF/GAP verdicts,
-scored on false-gap and false-proof rate separately, since the two costs are not
-symmetric: a false gap wastes preparation time, while a false proof leaves a real
-weakness unprepared. Building that set is a roadmap item.
+Two kinds exist in principle; one exists in practice.
+
+**Behavioral regression — shipped.** A dataset of scenarios freezes reference
+behavior for the agent graph. Each scenario declares its suites, its inputs
+per run — a fixture profile over the repo's own sample posting, optional
+round text, scripted answers and assessments — and its reference outputs: a
+trajectory template, the interrupt count, the processed, accepted, rejected
+and remaining-gap identifier sets, package validity and the stop reason.
+Trajectory templates were authored by running this repo's graph and
+recording, so they are facts about this code, not aspirations.
+
+The target drives the real compiled graph through interrupt and resume;
+evaluators score three layers:
+
+1. **Trajectory** — strict match of every turn's node sequence against the
+   frozen template.
+2. **State** — gap processing (identifiers and interrupt counts) and
+   admission sets (accepted, rejected, remaining, audit completeness, and
+   the invariant that no identifier is both accepted and rejected).
+3. **Outcome** — package validity and stop reason, plus a null-safe check
+   that round context changed guidance while evidence and coverage held
+   still.
+
+Suite semantics: the **offline** suite injects a deterministic fixture
+provider through the same seam production uses and runs in continuous
+integration — a red cell fails the build. The **live** suite wraps the real
+provider in a counting one so a model-backed evaluator can assert genuine
+calls happened; it needs credentials and never runs in CI.
+
+What this proves: a change that alters the loop's behavior — its path, its
+questions, its admissions, its terminations — cannot merge silently. The
+recorded fire drill in [`FAILURE-ANALYSIS.md`](FAILURE-ANALYSIS.md) shows the
+suite catching a deliberately introduced regression that every outcome-level
+check accepted. What this deliberately does not prove: that any verdict,
+strategy or question is *good*. A frozen behavior can be a frozen mistake.
+
+**Quality evaluation — open.** Scoring the system against hand-labelled
+reference data does not exist yet. The needed set is unchanged: real postings
+with labelled verdicts, scored on false-gap and false-proof rates separately,
+since the two costs are not symmetric — a false gap wastes preparation time,
+while a false proof leaves a real weakness unprepared. Until it exists, no
+claim that one path is better than another is measurable here.
 
 ## References
 

@@ -163,6 +163,45 @@ from the queue size under a hard cap. The ceilings are load-bearing either
 way: they are what makes "bounded" a property of the code rather than a
 description of intent.
 
+## Regression before quality
+
+The first evaluation shipped is a behavioral regression suite, not a quality
+benchmark. That is sequencing, not preference. Behavior contracts are cheap
+to author (record what the code does today), deterministic to check (fixture
+providers through the seam), and enforceable in continuous integration from
+day one. Quality measurement needs labelled reference data that does not
+exist yet, and pretending a regression suite is a quality benchmark would be
+the exact overclaim this repo's limitations section exists to prevent. The
+cost of the ordering is stated everywhere the suite is described: a frozen
+behavior can be a frozen mistake, and green cells prove stability, not merit.
+
+## Provider injection over client patching
+
+The suites drive the real compiled graph with providers injected through the
+same ``model=`` seam production uses — a fixture provider offline, a counting
+wrapper around the real one live. The alternative, monkeypatching client
+constructors and module attributes, was rejected because it bypasses the one
+boundary this repo promises to keep: no stage touches a vendor SDK, and
+everything model-shaped enters through the seam. Patching would test a
+runtime the production code never has, and every patch site is a place the
+test can drift from reality. The seam was the test hook all along; the
+evaluation suite using it is evidence the boundary is real. A side effect
+worth naming: extraction and matching stay live code under the offline
+suite, so the fixtures cover less and the production paths cover more.
+
+## The deliberate-regression record
+
+A suite nobody has seen catch a bug is an untested alarm. Before the
+regression suite was documented as protection, it was made to fire once, on
+purpose: a plausible one-question cap introduced on a throwaway branch, the
+red matrix captured, the branch deleted, the restored green captured —
+[`FAILURE-ANALYSIS.md`](FAILURE-ANALYSIS.md) is the record. The experiment
+also produced the suite's sharpest justification: the capped run's package
+was structurally valid and its stop reason terminal-normal, so every
+outcome-level signal reported success while two-thirds of the loop's work
+silently disappeared. The cost was an afternoon; the alternative was
+shipping an alarm that had never rung.
+
 ## Tracing lives inside the seam, off by default
 
 Optional observability is wired at exactly one place: the provider

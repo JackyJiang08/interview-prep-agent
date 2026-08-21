@@ -81,7 +81,7 @@ unmeasured — as are model extraction, the strategy, and the questions. The
 match threshold needs calibrating against real data rather than one synthetic
 example. All of it waits on the evaluation set.
 
-## Layer 2 — bounded decision layer · shipped, unevaluated
+## Layer 2 — bounded decision layer · shipped
 
 **Owns** the choice of what to do when the fixed path runs out. The decision
 this repo's data actually produces is the first of the three anticipated —
@@ -132,18 +132,21 @@ regenerate, but it may not rewrite the verbatim requirement text carried up
 from extraction. Grounding is established at the bottom and every layer above
 inherits it unchanged.
 
-**Ship criteria: two of three met.** The bar this document set was a real
+**Ship criteria: three of three met.** The bar this document set was a real
 tool with a defined failure mode, traces good enough to debug a wrong
 trajectory, and an evaluation set showing the loop does not degrade Layer 1.
 The interrupt capability is that tool — its failure modes (rejected answers,
-repeated targets, budget exhaustion) are defined and tested — and
-`agent_trace.json` records the parsed round, every queue selection, every
-interrupt payload, every assessment verdict with its decision reason, both
-generation events and the stop reason, in order, with the full audit trail
-beside it in `clarification_records.json`. The evaluation set does not exist. That criterion
-is not weakened by the other two being met: until packages produced with the
-loop are measured against plain workflow runs, this layer is a capability,
-not a proven improvement, and it is not called done here.
+repeated targets, budget exhaustion) are defined and tested. The trace exists
+at trajectory grain: `agent_trace.json` records the parsed round, every queue
+selection, every interrupt payload, every assessment verdict with its
+decision reason, both generation events and the stop reason, in order, with
+the full audit trail beside it in `clarification_records.json`. And the third
+criterion is now met in exactly its stated sense: the regression suite's
+all-rejected scenario demonstrates the loop cannot degrade Layer 1's honest
+gaps — every rejected answer leaves its gap standing and the package still
+validates — and the no-round complete-profile scenario demonstrates it never
+interrupts without cause. Behavior is locked; quality measurement remains the
+open track.
 
 **What Layer 3 still owes.** State across runs — a thread survives its own
 interrupts, but nothing survives the process — and feedback rounds beyond the
@@ -174,28 +177,34 @@ writes it at the end; Layer 1 stays stateless and unaware of it.
   one, the most recent write wins by accident rather than by design, and
   correcting a mistake becomes indistinguishable from introducing one
 
-## Cross-cutting — traces, evaluation, failure analysis · planned
+## Cross-cutting — two tracks
 
-**Traces.** One record per run: the inputs, each step, each decision and its
-reason, each artifact. Layer 1 approximates this today by writing a JSON file
-per stage — `examples/trace/` holds one such run over the committed inputs.
-That stops being sufficient the moment control flow varies between runs, because
-the interesting question changes from "what did each stage output?" to "why did
-this run take a different path?"
+**Regression evaluation · shipped.** A scenario suite freezes reference
+behavior — trajectories, state deltas, outcomes — and scores the real
+compiled agent graph against it on three layers: strict trajectory match,
+gap-processing and admission-set state, and terminal outcome. The offline
+suite runs in continuous integration and a red cell fails the build; a live
+suite exists for opt-in runs against the real provider. The suite has caught
+a deliberately introduced regression — a one-question cap that every outcome
+check waved through — and the record is
+[`FAILURE-ANALYSIS.md`](FAILURE-ANALYSIS.md). Traces exist at both grains:
+per-stage artifacts from the workflow, `agent_trace.json` and
+`clarification_records.json` from the loop.
 
-**Evaluation.** A set of real postings with hand-labelled verdicts, scoring
-false gaps and false proofs separately: a false gap wastes preparation time,
-while a false proof leaves a real weakness unaddressed. These costs are not
-symmetric and a single accuracy number hides the difference.
-
-This gates most of the work above. Without it, semantic matching, a decision
-loop, and threshold changes are all unfalsifiable — each can be shipped, none
-can be shown to help.
+**Quality evaluation · open.** Nothing yet scores match verdicts or package
+quality against labelled reference data. The needed artifact is unchanged: a
+set of real postings with hand-labelled verdicts, scoring false gaps and
+false proofs separately — a false gap wastes preparation time, a false proof
+leaves a real weakness unaddressed, and a single accuracy number hides the
+asymmetry. This track still gates every "is it better?" claim: semantic
+matching, threshold calibration, and any statement that one extractor,
+matcher or loop beats another. The regression suite deliberately does not
+answer these questions — a frozen behavior can be a frozen mistake.
 
 **Failure analysis.** Written up, kept in the repo, and specific: what was
-expected, what happened, which layer produced it, what changed as a result. A
-list of fixed bugs is not the same artifact; the value is in the pattern across
-failures, which is what tells you whether the next layer is worth building or
+expected, what happened, which layer produced it, what changed as a result.
+The first entry is the deliberate-regression record above; the pattern across
+future entries is what tells you whether the next layer is worth building or
 the current one is not finished.
 
 ## What this architecture gives up
