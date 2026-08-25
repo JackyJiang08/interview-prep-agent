@@ -1,0 +1,25 @@
+# Keep the build context minimal: nothing secret, nothing generated, nothing
+# large that the image does not need.
+.git
+.github
+.venv
+venv
+_source
+out
+node_modules
+web/node_modules
+web/dist
+**/__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+*.egg-info
+.env
+.env.local
+data
+docs
+examples/trace
+tests
+*.md
+# pyproject declares the readme, so the build needs this one back.
+!README.md
