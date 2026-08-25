@@ -15,6 +15,7 @@ from .config import load_settings
 from .corpus import CorpusError, load_evidence, load_job_description
 from .models import FocusPlan, Status
 from .providers import ProviderError, build_model
+from .search import maybe_build_search_provider
 from .workflow import (
     EXTRACTORS,
     LEXICAL,
@@ -93,6 +94,15 @@ def build_parser() -> argparse.ArgumentParser:
     prep.add_argument("--out", type=Path, default=None, help="directory for stage artifacts")
     prep.add_argument("--config", type=Path, default=None, help="settings file")
     prep.add_argument(
+        "--research-file",
+        type=Path,
+        default=None,
+        help=(
+            "optional file of role research notes; informs strategy and "
+            "questions only, never matching"
+        ),
+    )
+    prep.add_argument(
         "--extractor",
         choices=EXTRACTORS,
         default=LEXICAL,
@@ -126,6 +136,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     agent.add_argument("--out", type=Path, default=None, help="directory for artifacts")
     agent.add_argument("--config", type=Path, default=None, help="settings file")
+    agent.add_argument(
+        "--research-file",
+        type=Path,
+        default=None,
+        help=(
+            "optional file of role research notes; informs strategy and "
+            "questions only, never matching"
+        ),
+    )
     agent.add_argument(
         "--extractor",
         choices=EXTRACTORS,
@@ -257,6 +276,11 @@ def run_prep_command(args: argparse.Namespace) -> int:
             "markdown" if Path(args.evidence).suffix.lower() in (".md", ".markdown") else "corpus"
         )
         settings = load_settings(args.config)
+        research_text = (
+            Path(args.research_file).read_text(encoding="utf-8")
+            if args.research_file is not None
+            else ""
+        )
         # The strategy and question stages always call a provider, so the key
         # is required up front rather than failing three stages in.
         model = build_model()
@@ -269,6 +293,8 @@ def run_prep_command(args: argparse.Namespace) -> int:
             extractor=args.extractor,
             matcher=args.matcher,
             model=model,
+            research_text=research_text,
+            search=maybe_build_search_provider(),
         )
     except (CorpusError, ProviderError, QualityGateError, OSError) as error:
         print(f"error: {error}", file=sys.stderr)
@@ -310,6 +336,11 @@ def run_agent_command(args: argparse.Namespace) -> int:
         round_text = args.round or ""
         if args.round_file is not None:
             round_text = Path(args.round_file).read_text(encoding="utf-8")
+        research_text = (
+            Path(args.research_file).read_text(encoding="utf-8")
+            if args.research_file is not None
+            else ""
+        )
         settings = load_settings(args.config)
         # The workflow's preparation stages and the answer assessment always
         # call a provider, so the key is required up front.
@@ -325,6 +356,8 @@ def run_agent_command(args: argparse.Namespace) -> int:
             extractor=_resolve_extractor(args.extractor, model),
             matcher=_resolve_matcher(args.matcher, model),
             round_text=round_text,
+            research_text=research_text,
+            search=maybe_build_search_provider(),
         )
     except (CorpusError, ProviderError, QualityGateError, OSError) as error:
         print(f"error: {error}", file=sys.stderr)

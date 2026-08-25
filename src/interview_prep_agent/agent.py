@@ -49,6 +49,7 @@ from .models import (
     PrepPackage,
     Requirement,
     RequirementMatch,
+    ResearchFinding,
 )
 from .providers import ProviderError, StructuredModel
 from .workflow.extract import extract_requirements
@@ -65,6 +66,7 @@ CEILING_NOTE = "question ceiling reached with gaps remaining"
 # the workflow's own control fields stay its own.
 WORKFLOW_RESULT_FIELDS = (
     "evidence",
+    "research_findings",
     "requirements",
     "matches",
     "focus_areas",
@@ -119,6 +121,7 @@ class AgentState(TypedDict, total=False):
     evidence_source: str
     evidence_format: str
     round_text: str
+    research_text: str
     # round context, parsed once
     round_context: InterviewRound | None
     # admission and audit, additive
@@ -128,6 +131,7 @@ class AgentState(TypedDict, total=False):
     processed_requirement_ids: Annotated[list[str], operator.add]
     # workflow-derived business state
     evidence: list[EvidenceItem]
+    research_findings: list[ResearchFinding]
     requirements: list[Requirement]
     matches: list[RequirementMatch]
     focus_areas: list[FocusArea]
@@ -155,6 +159,7 @@ class AgentInput(TypedDict):
     evidence_source: str
     evidence_format: str
     round_text: str
+    research_text: str
 
 
 def select_next_gap(
@@ -287,10 +292,13 @@ def build_agent_graph(
     checkpointer: Any = None,
     extractor: Extractor = extract_requirements,
     matcher: Matcher | None = None,
+    search: Any = None,
     max_agent_actions: int | None = None,
     agent_action_cap: int = 32,
     max_questions_per_run: int | None = None,
     min_clarification_length: int = 24,
+    max_search_queries: int = 3,
+    max_research_findings: int = 12,
     match_threshold: float = 0.30,
     max_matches: int = 3,
     min_requirements: int = 1,
@@ -340,11 +348,14 @@ def build_agent_graph(
         extractor=extractor,
         matcher=matcher,
         model=model,
+        search=search,
         match_threshold=match_threshold,
         max_matches=max_matches,
         min_requirements=min_requirements,
         max_requirements=max_requirements,
         min_questions=min_questions,
+        max_search_queries=max_search_queries,
+        max_research_findings=max_research_findings,
     )
 
     def effective_action_budget(state: AgentState) -> int:
@@ -388,6 +399,7 @@ def build_agent_graph(
                 "evidence_source": source,
                 "evidence_format": "corpus",
                 "round_context": state.get("round_context"),
+                "research_text": state.get("research_text", ""),
             }
         )
         return {field: result.get(field) for field in WORKFLOW_RESULT_FIELDS}
@@ -554,6 +566,8 @@ def run_agent(
     extractor: Extractor = extract_requirements,
     matcher: Matcher | None = None,
     round_text: str = "",
+    research_text: str = "",
+    search: Any = None,
     thread_id: str = "agent",
     on_event: Callable[[dict[str, Any]], None] | None = None,
 ) -> tuple[AgentState, list[dict[str, Any]]]:
@@ -596,10 +610,13 @@ def run_agent(
         checkpointer=InMemorySaver(),
         extractor=extractor,
         matcher=matcher,
+        search=search,
         max_agent_actions=settings.max_agent_actions,
         agent_action_cap=settings.agent_action_cap,
         max_questions_per_run=settings.max_questions_per_run,
         min_clarification_length=settings.min_clarification_length,
+        max_search_queries=settings.max_search_queries,
+        max_research_findings=settings.max_research_findings,
         match_threshold=settings.match_threshold,
         max_matches=settings.max_matches_per_requirement,
         min_requirements=settings.min_requirements,
@@ -669,6 +686,7 @@ def run_agent(
         "evidence_source": evidence_source,
         "evidence_format": evidence_format,
         "round_text": round_text,
+        "research_text": research_text,
     }
     while True:
         pending: list[dict[str, Any]] = []

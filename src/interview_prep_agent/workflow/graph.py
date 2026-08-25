@@ -43,19 +43,23 @@ from ..models import (
     PrepPackage,
     Requirement,
     RequirementMatch,
+    ResearchFinding,
 )
 from ..providers import StructuredModel
+from ..search import SearchProvider
 from .assess import build_focus_areas
 from .extract import extract_requirements
 from .gates import (
     check_matches,
     check_requirements,
+    check_research,
     collect_package_errors,
     collect_requirement_errors,
 )
 from .match import match_requirements
 from .plan import build_focus_plan
 from .questions import generate_questions_with_model
+from .research import gather_research
 from .strategy import build_strategy_with_model
 
 Extractor = Callable[[str], list[Requirement]]
@@ -216,6 +220,10 @@ class PrepState(TypedDict, total=False):
     # because round context changes what to emphasize, never what the
     # candidate can claim.
     round_context: InterviewRound | None
+    # Optional pasted research notes. Same invariant as the round context:
+    # research informs preparation only, and findings are never matchable.
+    research_text: str
+    research_findings: list[ResearchFinding]
     # derived source evidence
     evidence: list[EvidenceItem]
     # grounded intermediates
@@ -239,22 +247,27 @@ class PrepInput(TypedDict):
     evidence_source: str
     evidence_format: str
     round_context: NotRequired[InterviewRound | None]
+    research_text: NotRequired[str]
 
 
 def build_prep_workflow(
     extractor: Extractor = extract_requirements,
     matcher: Matcher | None = None,
     model: StructuredModel | None = None,
+    search: SearchProvider | None = None,
     match_threshold: float = 0.30,
     max_matches: int = 3,
     min_requirements: int = 1,
     max_requirements: int = 50,
     min_questions: int = 8,
+    max_search_queries: int = 3,
+    max_research_findings: int = 12,
 ):
     """Compile the full preparation workflow.
 
         START -> validate_inputs -> extract_evidence -> extract_requirements
-              -> match -> assess_gaps -> build_strategy -> generate_questions
+              -> match -> assess_gaps -> research -> build_strategy
+              -> generate_questions
               -> validate_package -|- valid   -> assemble_package -> END
                                    |- invalid -> report_errors    -> END
 
@@ -333,6 +346,25 @@ def build_prep_workflow(
     def assess_gaps(state: PrepState) -> dict[str, Any]:
         return {"focus_areas": build_focus_areas(state["requirements"], state["matches"])}
 
+    def research(state: PrepState) -> dict[str, Any]:
+        """Gather role intelligence. Deterministic; no model call.
+
+        Runs after matching on purpose: nothing gathered here can reach the
+        extraction or matching stages, and with no provided text and no
+        search provider it contributes an empty list and the run is
+        unchanged.
+        """
+        findings = gather_research(
+            state["job_description"],
+            state.get("requirements", []),
+            state.get("research_text", ""),
+            search,
+            max_queries=max_search_queries,
+            max_findings=max_research_findings,
+        )
+        check_research(findings, max_research_findings)
+        return {"research_findings": findings}
+
     def build_strategy(state: PrepState) -> dict[str, Any]:
         return {
             "strategy": build_strategy_with_model(
@@ -341,6 +373,7 @@ def build_prep_workflow(
                 state["focus_areas"],
                 resolve_model(),
                 round_context=state.get("round_context"),
+                research=state.get("research_findings", []),
             )
         }
 
@@ -352,6 +385,7 @@ def build_prep_workflow(
                 state["strategy"],
                 resolve_model(),
                 round_context=state.get("round_context"),
+                research=state.get("research_findings", []),
             )
         }
 
@@ -365,6 +399,8 @@ def build_prep_workflow(
             state.get("strategy"),
             state.get("mock_questions", []),
             min_questions=min_questions,
+            research_findings=state.get("research_findings", []),
+            max_research_findings=max_research_findings,
         )
         return {"validation_errors": errors, "package_valid": not errors}
 
@@ -390,6 +426,7 @@ def build_prep_workflow(
     builder.add_node("extract_requirements", extract_requirements_node)
     builder.add_node("match", match)
     builder.add_node("assess_gaps", assess_gaps)
+    builder.add_node("research", research)
     builder.add_node("build_strategy", build_strategy)
     builder.add_node("generate_questions", generate_questions)
     builder.add_node("validate_package", validate_package)
@@ -401,7 +438,8 @@ def build_prep_workflow(
     builder.add_edge("extract_evidence", "extract_requirements")
     builder.add_edge("extract_requirements", "match")
     builder.add_edge("match", "assess_gaps")
-    builder.add_edge("assess_gaps", "build_strategy")
+    builder.add_edge("assess_gaps", "research")
+    builder.add_edge("research", "build_strategy")
     builder.add_edge("build_strategy", "generate_questions")
     builder.add_edge("generate_questions", "validate_package")
     builder.add_conditional_edges(

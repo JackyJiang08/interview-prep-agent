@@ -20,9 +20,10 @@ from ..models import (
     MockQuestionList,
     Requirement,
     RequirementMatch,
+    ResearchFinding,
 )
 from ..providers import ProviderError, StructuredModel
-from .strategy import _round_section
+from .strategy import _research_section, _round_section
 
 MIN_QUESTIONS = 8
 MAX_REQUESTED_QUESTIONS = 12
@@ -45,6 +46,10 @@ Rules:
 - When an interview round section is supplied, weight the questions toward
   that round's type and focus. Round context changes what to emphasize,
   never what the candidate can claim.
+- When a role research section is supplied, use it to make questions
+  realistic - reported themes, phrasing, expectations - and you may cite a
+  finding inline by its SRC- identifier. Findings are role intelligence, not
+  candidate evidence: never cite one as support for a match.
 
 Return nothing except data conforming to the supplied schema.
 """
@@ -59,6 +64,7 @@ def build_question_prompt(
     verdicts: Sequence[RequirementMatch],
     strategy: InterviewStrategy,
     round_context: InterviewRound | None = None,
+    research: Sequence[ResearchFinding] = (),
 ) -> str:
     """Place the validated state after the instructions, with boundaries."""
     requirement_rows = [{"requirement_id": r.id, "requirement": r.text} for r in requirements]
@@ -79,6 +85,7 @@ def build_question_prompt(
         "----- STRATEGY -----\n"
         f"{_dump(strategy.model_dump(mode='json'))}\n"
         f"{_round_section(round_context)}"
+        f"{_research_section(research)}"
     )
 
 
@@ -107,6 +114,7 @@ def generate_questions_with_model(
     strategy: InterviewStrategy,
     model: StructuredModel,
     round_context: InterviewRound | None = None,
+    research: Sequence[ResearchFinding] = (),
 ) -> list[MockQuestion]:
     """Generate practice questions using a provider.
 
@@ -114,7 +122,7 @@ def generate_questions_with_model(
         ProviderError: If the call fails or the response cannot be used.
     """
     payload = model.generate_json(
-        build_question_prompt(requirements, verdicts, strategy, round_context),
+        build_question_prompt(requirements, verdicts, strategy, round_context, research),
         response_schema(),
     )
     return parse_questions(payload)

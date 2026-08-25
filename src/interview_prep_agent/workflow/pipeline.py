@@ -30,6 +30,7 @@ REQUIREMENTS_ARTIFACT = "requirements.json"
 MATCHES_ARTIFACT = "matches.json"
 FOCUS_AREAS_ARTIFACT = "focus_areas.json"
 PLAN_ARTIFACT = "focus_plan.json"
+RESEARCH_ARTIFACT = "research_findings.json"
 STRATEGY_ARTIFACT = "strategy.json"
 QUESTIONS_ARTIFACT = "questions.json"
 PACKAGE_ARTIFACT = "prep_package.json"
@@ -195,6 +196,8 @@ def run_prep(
     extractor: str = LEXICAL,
     matcher: str = LEXICAL,
     model: StructuredModel | None = None,
+    research_text: str = "",
+    search=None,
 ) -> PrepState:
     """Run the full preparation graph and return its final state.
 
@@ -230,16 +233,20 @@ def run_prep(
         extractor=_resolve_extractor(extractor, model),
         matcher=_resolve_matcher(matcher, model),
         model=model,
+        search=search,
         match_threshold=settings.match_threshold,
         max_matches=settings.max_matches_per_requirement,
         min_requirements=settings.min_requirements,
         max_requirements=settings.max_requirements,
+        max_search_queries=settings.max_search_queries,
+        max_research_findings=settings.max_research_findings,
     )
     state = workflow.invoke(
         {
             "job_description": job_description,
             "evidence_source": evidence_source,
             "evidence_format": evidence_format,
+            "research_text": research_text,
         }
     )
 
@@ -263,6 +270,13 @@ def _write_prep_artifacts(output_dir: Path, state: PrepState) -> None:
     _dump(
         output_dir / FOCUS_AREAS_ARTIFACT,
         [item.model_dump(mode="json") for item in state.get("focus_areas", [])],
+    )
+    _dump(
+        output_dir / RESEARCH_ARTIFACT,
+        [
+            item.model_dump(mode="json", exclude_none=True)
+            for item in state.get("research_findings", []) or []
+        ],
     )
     strategy = state.get("strategy")
     if strategy is not None:
@@ -290,6 +304,7 @@ __all__ = [
     "PLAN_ARTIFACT",
     "QUESTIONS_ARTIFACT",
     "REQUIREMENTS_ARTIFACT",
+    "RESEARCH_ARTIFACT",
     "STRATEGY_ARTIFACT",
     "run_pipeline",
     "run_prep",

@@ -18,6 +18,7 @@ from ..models import (
     InterviewStrategy,
     Requirement,
     RequirementMatch,
+    ResearchFinding,
 )
 from ..providers import ProviderError, StructuredModel
 
@@ -41,9 +42,33 @@ Rules:
 - When an interview round section is supplied, tailor emphasis and framing to
   that round. Round context changes what to emphasize, never what the
   candidate can claim; invent no round details beyond the section.
+- When a role research section is supplied, use it to sharpen emphasis and
+  realism, and you may cite a finding inline by its SRC- identifier. Findings
+  are role intelligence, not candidate evidence: never cite one as support
+  for a match, and never let one add to what the candidate can claim.
 
 Return nothing except data conforming to the supplied schema.
 """
+
+
+def _research_section(findings: Sequence[ResearchFinding]) -> str:
+    """Render the optional role-research block appended to preparation prompts.
+
+    Same invariant as the round section: research reaches only the
+    preparation stages. Extraction and matching never see it, and a finding
+    can never become candidate evidence.
+    """
+    if not findings:
+        return ""
+    rows = [
+        {
+            "finding_id": item.finding_id,
+            "title": item.title,
+            "summary": item.summary,
+        }
+        for item in findings
+    ]
+    return f"----- ROLE RESEARCH -----\n{json.dumps(rows, indent=2, ensure_ascii=False)}\n"
 
 
 def _round_section(round_context: InterviewRound | None) -> str:
@@ -73,6 +98,7 @@ def build_strategy_prompt(
     verdicts: Sequence[RequirementMatch],
     focus_areas: Sequence[FocusArea],
     round_context: InterviewRound | None = None,
+    research: Sequence[ResearchFinding] = (),
 ) -> str:
     """Place the validated state after the instructions, with boundaries."""
     requirement_rows = [
@@ -98,6 +124,7 @@ def build_strategy_prompt(
         "----- FOCUS AREAS -----\n"
         f"{_dump(focus_rows)}\n"
         f"{_round_section(round_context)}"
+        f"{_research_section(research)}"
     )
 
 
@@ -126,6 +153,7 @@ def build_strategy_with_model(
     focus_areas: Sequence[FocusArea],
     model: StructuredModel,
     round_context: InterviewRound | None = None,
+    research: Sequence[ResearchFinding] = (),
 ) -> InterviewStrategy:
     """Compose the strategy using a provider.
 
@@ -136,7 +164,7 @@ def build_strategy_with_model(
         ProviderError: If the call fails or the response cannot be used.
     """
     payload = model.generate_json(
-        build_strategy_prompt(requirements, verdicts, focus_areas, round_context),
+        build_strategy_prompt(requirements, verdicts, focus_areas, round_context, research),
         response_schema(),
     )
     return parse_strategy(payload)
