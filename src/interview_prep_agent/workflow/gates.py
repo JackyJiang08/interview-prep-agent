@@ -26,6 +26,8 @@ from ..models import (
     MockQuestion,
     Requirement,
     RequirementMatch,
+    ResearchFinding,
+    ResearchSourceKind,
     Status,
 )
 
@@ -396,6 +398,8 @@ def collect_package_errors(
     strategy: InterviewStrategy | None,
     questions: Sequence[MockQuestion],
     min_questions: int = 8,
+    research_findings: Sequence[ResearchFinding] = (),
+    max_research_findings: int = 12,
 ) -> list[str]:
     """Run the full deterministic invariant set over a candidate package.
 
@@ -447,6 +451,8 @@ def collect_package_errors(
     if strategy is not None:
         errors += collect_strategy_errors(requirements, verdicts, focus_areas, strategy)
     errors += collect_question_errors(requirements, verdicts, questions, min_questions)
+    errors += collect_research_errors(research_findings, max_research_findings)
+    errors += _research_citation_errors(strategy, questions, research_findings)
 
     return errors
 
@@ -478,3 +484,89 @@ def check_package(
     )
     if errors:
         raise QualityGateError("; ".join(errors))
+
+
+_SRC_TOKEN = re.compile(r"\bSRC-\d{3,}\b")
+
+
+def collect_research_errors(
+    findings: Sequence[ResearchFinding],
+    max_findings: int = 12,
+) -> list[str]:
+    """Check a minted finding set.
+
+    Identifiers must run sequentially from SRC-001 and be unique, search
+    findings must carry the URL they came from, and the count must respect
+    the configured cap.
+    """
+    errors: list[str] = []
+    if len(findings) > max_findings:
+        errors.append(
+            f"coverage: expected at most {max_findings} research findings, received {len(findings)}"
+        )
+    identifiers = [item.finding_id for item in findings]
+    if len(set(identifiers)) != len(identifiers):
+        errors.append("identity: research finding identifiers must be unique")
+    else:
+        expected = [f"SRC-{index:03d}" for index in range(1, len(findings) + 1)]
+        if identifiers and identifiers != expected:
+            errors.append(
+                "identity: research finding identifiers must run sequentially from SRC-001"
+            )
+    for item in findings:
+        if item.source_kind is ResearchSourceKind.SEARCH and not item.url:
+            errors.append(
+                f"grounding: {item.finding_id} came from search and must carry its source url"
+            )
+    return errors
+
+
+def check_research(findings: Sequence[ResearchFinding], max_findings: int = 12) -> None:
+    """Raise if a finding set fails any check.
+
+    Raises:
+        QualityGateError: With every failure listed, not just the first.
+    """
+    errors = collect_research_errors(findings, max_findings)
+    if errors:
+        raise QualityGateError("; ".join(errors))
+
+
+def _research_citation_errors(
+    strategy: InterviewStrategy | None,
+    questions: Sequence[MockQuestion],
+    findings: Sequence[ResearchFinding],
+) -> list[str]:
+    """Resolve every SRC- token cited in preparation text.
+
+    Findings may be cited inline in strategy and question prose; each cited
+    identifier must resolve to a minted finding. Citations *as evidence* need
+    no check here - a finding identifier in an evidence list already fails
+    the match and package gates, because findings are never in the corpus.
+    """
+    known = {item.finding_id for item in findings}
+    texts: list[tuple[str, str]] = []
+    if strategy is not None:
+        texts.append(("strategy positioning", strategy.positioning_statement))
+        for item in strategy.top_priorities:
+            texts.append((f"strategy item for {item.requirement_id}", item.rationale))
+            texts.append((f"strategy item for {item.requirement_id}", item.preparation_theme))
+        for story in strategy.stories_to_prepare:
+            texts.append((f"story plan for {story.requirement_id}", story.story_to_prepare))
+        for risk in strategy.risks_to_address:
+            texts.append((f"risk for {risk.requirement_id}", risk.risk))
+            texts.append((f"risk for {risk.requirement_id}", risk.mitigation))
+    for question in questions:
+        texts.append((f"question for {question.requirement_id}", question.question))
+        texts.append((f"question for {question.requirement_id}", question.follow_up_probe))
+        for line in question.answer_outline:
+            texts.append((f"question for {question.requirement_id}", line))
+
+    errors: list[str] = []
+    reported: set[tuple[str, str]] = set()
+    for label, text in texts:
+        for token in _SRC_TOKEN.findall(text):
+            if token not in known and (label, token) not in reported:
+                reported.add((label, token))
+                errors.append(f"traceability: {label} cites unknown research {token}")
+    return errors
