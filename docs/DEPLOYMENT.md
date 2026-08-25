@@ -22,12 +22,22 @@ Everything below is run once, from a shell with the `az` CLI signed in. Values
 in angle brackets are yours to choose; the rest can be pasted as written.
 
 ```bash
-# Names used throughout. Pick a region close to you.
+# Names used throughout. Pick a region close to you — but check first that
+# your subscription allows it: student and other restricted subscriptions
+# carry an "Allowed resource deployment regions" policy, and a region outside
+# it fails with RequestDisallowedByAzure when the environment is created.
+az policy assignment list --disable-scope-strict-match \
+  --query "[].parameters.listOfAllowedLocations.value" --output json
+
 export RG=interview-prep-agent-rg
-export LOCATION=eastus
+export LOCATION=centralus
 export ENVIRONMENT=interview-prep-agent-env
 export APP=interview-prep-agent
-export GHCR_IMAGE=ghcr.io/<your-github-user>/interview-prep-agent:latest
+
+# The registry reference must be lowercase, even if your GitHub username is
+# not. The deploy workflow lowercases it for you; this one is for the manual
+# steps below.
+export GHCR_IMAGE=ghcr.io/<your-github-user-lowercased>/interview-prep-agent:latest
 ```
 
 ```bash
@@ -44,6 +54,11 @@ az containerapp env create \
   --location "$LOCATION"
 ```
 
+The first deployment has a chicken-and-egg problem: the app wants an image,
+and the image is built by the workflow that deploys to the app. Create the app
+on a public placeholder, and let the first workflow run replace it. Every
+later run just rolls the image forward.
+
 ```bash
 # The app itself. min-replicas 0 is the important flag: the app scales to
 # zero when idle, which is what keeps a credit-funded deployment near free.
@@ -51,7 +66,7 @@ az containerapp create \
   --name "$APP" \
   --resource-group "$RG" \
   --environment "$ENVIRONMENT" \
-  --image "$GHCR_IMAGE" \
+  --image mcr.microsoft.com/k8se/quickstart:latest \
   --target-port 8000 \
   --ingress external \
   --min-replicas 0 \
@@ -60,7 +75,9 @@ az containerapp create \
   --env-vars PORT=8000
 ```
 
-If the image is private, register the registry once:
+A package pushed to the registry for the first time is private, so register
+the credentials once — before the first workflow run, or the roll-forward
+step will fail to pull:
 
 ```bash
 az containerapp registry set \
@@ -104,7 +121,7 @@ echo "AZURE_SUBSCRIPTION_ID=$SUBSCRIPTION_ID"
 ### Repository variables to set
 
 Under **Settings → Secrets and variables → Actions → Variables**, set these
-six. They are identifiers, not secrets — which is the point of the OIDC
+five. They are identifiers, not secrets — which is the point of the OIDC
 setup:
 
 | Variable | Value |
