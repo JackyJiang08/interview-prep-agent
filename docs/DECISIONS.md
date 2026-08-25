@@ -202,6 +202,38 @@ outcome-level signal reported success while two-thirds of the loop's work
 silently disappeared. The cost was an afternoon; the alternative was
 shipping an alarm that had never rung.
 
+## What the second provider cost
+
+The provider seam has promised since it was written that "adding a second
+provider means adding a file here and nothing else." Adding Azure OpenAI
+tested that claim, and it mostly held: ``providers/azure.py`` is a new file
+implementing the same two-method contract, registered by three lines in the
+package's ``build_model``. No stage, gate, graph or prompt changed. The
+evaluation suite, the workflow and the agent were untouched.
+
+Three things did leak, and they are worth naming rather than glossing:
+
+1. **Selection had to reach the surfaces.** A seam with one implementation
+   needs no chooser; a seam with two does. ``--provider`` was added to the
+   prep, agent and eval commands, and to session creation. That is inherent
+   to having a choice, not a flaw in the seam.
+2. **Credential shape is provider-specific.** Gemini needs one key; Azure
+   needs an endpoint, a key and a deployment name. The server's refusal path
+   had to learn which settings each provider requires, because a useful error
+   message names the missing one.
+3. **One schema adaptation.** Azure's strict structured-output mode requires
+   every object to forbid extra properties and to list every property as
+   required — including optional ones. Pydantic emits the first and not the
+   second, so the provider walks the schema and closes the gap. This is
+   genuinely provider-shaped work, and it is confined to the provider file,
+   which is where the seam intends such work to live.
+
+The honest summary: the seam contained the vendor SDK and the request shape
+completely, and did not contain — could not contain — the fact that two
+options require a way to pick between them. That is the right division. The
+cost of the second provider was one file, one registry entry, one flag on
+three commands, and a handful of fields on one request model.
+
 ## Tracing lives inside the seam, off by default
 
 Optional observability is wired at exactly one place: the provider
