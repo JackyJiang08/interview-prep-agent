@@ -23,6 +23,7 @@ OFFLINE_METRICS = (
     "admission_set_correct",
     "terminal_state_valid",
     "round_guidance_changed",
+    "research_grounded",
 )
 
 

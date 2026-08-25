@@ -12,6 +12,7 @@ import json
 from typing import Any
 
 from ..providers import StructuredModel
+from ..search.base import SearchProvider, SearchResult
 
 
 def _json_between(text: str, start: str, end: str | None = None) -> Any:
@@ -28,10 +29,18 @@ def _matches_rows(prompt: str) -> list[dict[str, Any]]:
     raise AssertionError("the preparation prompt carried no matches block")
 
 
+def _first_finding_id(prompt: str) -> str | None:
+    if "----- ROLE RESEARCH -----" not in prompt:
+        return None
+    rows = _json_between(prompt, "----- ROLE RESEARCH -----")
+    return rows[0]["finding_id"] if rows else None
+
+
 def _round_label(prompt: str) -> str:
     if "----- INTERVIEW ROUND -----" not in prompt:
         return "general preparation"
-    payload = _json_between(prompt, "----- INTERVIEW ROUND -----")
+    end = "----- ROLE RESEARCH -----" if "----- ROLE RESEARCH -----" in prompt else None
+    payload = _json_between(prompt, "----- INTERVIEW ROUND -----", end)
     return payload.get("round_type") or "general preparation"
 
 
@@ -94,6 +103,8 @@ class FixtureProvider(StructuredModel):
     def _strategy(self, prompt: str) -> dict[str, Any]:
         rows = _matches_rows(prompt)
         label = _round_label(prompt)
+        finding = _first_finding_id(prompt)
+        cite = f" Reported themes support this (see {finding})." if finding else ""
         supported = [row for row in rows if row["coverage"] != "GAP"]
         gaps = [row for row in rows if row["coverage"] == "GAP"]
         return {
@@ -102,7 +113,7 @@ class FixtureProvider(StructuredModel):
                     "requirement_id": row["requirement_id"],
                     "evidence_ids": row["evidence_ids"],
                     "preparation_theme": (f"Prepare {row['requirement_id']} for the {label}."),
-                    "rationale": "Use the validated coverage and evidence links.",
+                    "rationale": "Use the validated coverage and evidence links." + cite,
                 }
                 for row in supported
             ],
@@ -131,6 +142,8 @@ class FixtureProvider(StructuredModel):
     def _questions(self, prompt: str) -> dict[str, Any]:
         rows = _matches_rows(prompt)
         label = _round_label(prompt)
+        finding = _first_finding_id(prompt)
+        probe_suffix = f" (reported: {finding})" if finding else ""
         questions = []
         index = 0
         while len(questions) < 8:
@@ -146,7 +159,7 @@ class FixtureProvider(StructuredModel):
                     "requirement_id": row["requirement_id"],
                     "capability_tested": "grounded evidence",
                     "evidence_ids": cited,
-                    "follow_up_probe": "What concrete evidence supports that?",
+                    "follow_up_probe": "What concrete evidence supports that?" + probe_suffix,
                     "answer_outline": [
                         "State the relevant evidence or the honest gap.",
                         "Explain the action and the result.",
@@ -164,6 +177,22 @@ class FixtureProvider(StructuredModel):
             raise AssertionError(
                 f"the scenario scripted no assessment for {requirement_id}"
             ) from error
+
+
+class FixtureSearchProvider(SearchProvider):
+    """Deterministic search results for the offline suite."""
+
+    def __init__(self, results: list[SearchResult]) -> None:
+        self.results = results
+        self.queries: list[str] = []
+
+    @property
+    def name(self) -> str:
+        return "behavior-search-fixture"
+
+    def search(self, query: str, max_results: int) -> list[SearchResult]:
+        self.queries.append(query)
+        return self.results[:max_results]
 
 
 class CountingProvider(StructuredModel):

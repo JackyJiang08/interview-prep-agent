@@ -99,6 +99,36 @@ def round_guidance_changed(
     return {"key": "round_guidance_changed", "score": observed == expected}
 
 
+def research_grounded(outputs: dict[str, Any], reference_outputs: dict[str, Any]) -> dict[str, Any]:
+    """Findings were minted and every preparation citation resolves.
+
+    Null-safe: scenarios that declare no expectation pass trivially. Where
+    declared, every run must mint sequential findings, cite at least one, and
+    cite nothing unminted — while candidate evidence stays untouched, which
+    the admission and coverage evaluators already hold constant.
+    """
+    expected = reference_outputs.get("research_grounded")
+    if expected is None:
+        return {
+            "key": "research_grounded",
+            "score": True,
+            "comment": "not applicable to this scenario",
+        }
+    scores = []
+    for run in outputs["runs"].values():
+        signature = run.get("research_signature", {})
+        finding_ids = signature.get("finding_ids", [])
+        cited = signature.get("cited_ids", [])
+        sequential = finding_ids == [f"SRC-{index:03d}" for index in range(1, len(finding_ids) + 1)]
+        scores.append(
+            len(finding_ids) > 0
+            and sequential
+            and len(cited) > 0
+            and set(cited) <= set(finding_ids)
+        )
+    return {"key": "research_grounded", "score": all(scores) == expected}
+
+
 def model_backed(outputs: dict[str, Any], reference_outputs: dict[str, Any]) -> dict[str, Any]:
     """The live suite made genuine provider calls on every run."""
     del reference_outputs
@@ -117,6 +147,7 @@ def evaluators_for_suite(suite: str) -> list[Evaluator]:
         admission_set_correct,
         terminal_state_valid,
         round_guidance_changed,
+        research_grounded,
     ]
     if suite == "live":
         evaluators.append(model_backed)

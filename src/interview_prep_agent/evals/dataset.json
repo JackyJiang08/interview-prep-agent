@@ -2,20 +2,50 @@
   "dataset_name": "interview-prep-agent-behavior",
   "trajectory_templates": {
     "no-interrupts": [
-      ["__start__", "parse_round", "generate_initial", "observe", "generate_final"]
+      [
+        "__start__",
+        "parse_round",
+        "generate_initial",
+        "observe",
+        "generate_final"
+      ]
     ],
     "three-interrupts": [
-      ["__start__", "parse_round", "generate_initial", "observe", "ask", "__interrupt__"],
-      ["assess_and_admit", "observe", "ask", "__interrupt__"],
-      ["assess_and_admit", "observe", "ask", "__interrupt__"],
-      ["assess_and_admit", "observe", "generate_final"]
+      [
+        "__start__",
+        "parse_round",
+        "generate_initial",
+        "observe",
+        "ask",
+        "__interrupt__"
+      ],
+      [
+        "assess_and_admit",
+        "observe",
+        "ask",
+        "__interrupt__"
+      ],
+      [
+        "assess_and_admit",
+        "observe",
+        "ask",
+        "__interrupt__"
+      ],
+      [
+        "assess_and_admit",
+        "observe",
+        "generate_final"
+      ]
     ]
   },
   "scenarios": [
     {
       "scenario_id": "complete-profile-no-round",
       "description": "A fully covered corpus with no round text runs straight to a valid package without interrupting.",
-      "suites": ["offline", "live"],
+      "suites": [
+        "offline",
+        "live"
+      ],
       "profile": "complete",
       "runs": [
         {
@@ -43,7 +73,10 @@
     {
       "scenario_id": "round-guidance-comparison",
       "description": "Two runs over the same complete corpus with different round texts: preparation differs while evidence and coverage are identical.",
-      "suites": ["offline", "live"],
+      "suites": [
+        "offline",
+        "live"
+      ],
       "profile": "complete",
       "runs": [
         {
@@ -88,7 +121,10 @@
     {
       "scenario_id": "mixed-clarifications",
       "description": "Three gap answers are admitted, rejected, and admitted in deterministic queue order; the rejected requirement stays a gap.",
-      "suites": ["offline", "live"],
+      "suites": [
+        "offline",
+        "live"
+      ],
       "profile": "gapped",
       "runs": [
         {
@@ -129,10 +165,21 @@
           "mixed": {
             "expected_trajectory": "three-interrupts",
             "expected_interrupt_count": 3,
-            "expected_processed_ids": ["REQ-002", "REQ-005", "REQ-006"],
-            "expected_accepted_ids": ["REQ-002", "REQ-006"],
-            "expected_rejected_ids": ["REQ-005"],
-            "expected_remaining_gap_ids": ["REQ-005"],
+            "expected_processed_ids": [
+              "REQ-002",
+              "REQ-005",
+              "REQ-006"
+            ],
+            "expected_accepted_ids": [
+              "REQ-002",
+              "REQ-006"
+            ],
+            "expected_rejected_ids": [
+              "REQ-005"
+            ],
+            "expected_remaining_gap_ids": [
+              "REQ-005"
+            ],
             "expected_package_valid": true,
             "expected_stop_reason": "valid_package_complete"
           }
@@ -142,7 +189,10 @@
     {
       "scenario_id": "all-clarifications-rejected",
       "description": "Every gap answer is rejected; every gap stays honest and the final package is still valid.",
-      "suites": ["offline", "live"],
+      "suites": [
+        "offline",
+        "live"
+      ],
       "profile": "gapped",
       "runs": [
         {
@@ -183,10 +233,22 @@
           "all-rejected": {
             "expected_trajectory": "three-interrupts",
             "expected_interrupt_count": 3,
-            "expected_processed_ids": ["REQ-002", "REQ-005", "REQ-006"],
+            "expected_processed_ids": [
+              "REQ-002",
+              "REQ-005",
+              "REQ-006"
+            ],
             "expected_accepted_ids": [],
-            "expected_rejected_ids": ["REQ-002", "REQ-005", "REQ-006"],
-            "expected_remaining_gap_ids": ["REQ-002", "REQ-005", "REQ-006"],
+            "expected_rejected_ids": [
+              "REQ-002",
+              "REQ-005",
+              "REQ-006"
+            ],
+            "expected_remaining_gap_ids": [
+              "REQ-002",
+              "REQ-005",
+              "REQ-006"
+            ],
             "expected_package_valid": true,
             "expected_stop_reason": "valid_package_complete"
           }
@@ -196,7 +258,9 @@
     {
       "scenario_id": "wrong-target-assessment",
       "description": "An assessment that names a different requirement is rejected by the admission gate regardless of its verdict; the audit record preserves the redirect.",
-      "suites": ["offline"],
+      "suites": [
+        "offline"
+      ],
       "profile": "gapped",
       "runs": [
         {
@@ -237,10 +301,103 @@
           "wrong-target": {
             "expected_trajectory": "three-interrupts",
             "expected_interrupt_count": 3,
-            "expected_processed_ids": ["REQ-002", "REQ-005", "REQ-006"],
-            "expected_accepted_ids": ["REQ-005", "REQ-006"],
-            "expected_rejected_ids": ["REQ-002"],
-            "expected_remaining_gap_ids": ["REQ-002"],
+            "expected_processed_ids": [
+              "REQ-002",
+              "REQ-005",
+              "REQ-006"
+            ],
+            "expected_accepted_ids": [
+              "REQ-005",
+              "REQ-006"
+            ],
+            "expected_rejected_ids": [
+              "REQ-002"
+            ],
+            "expected_remaining_gap_ids": [
+              "REQ-002"
+            ],
+            "expected_package_valid": true,
+            "expected_stop_reason": "valid_package_complete"
+          }
+        }
+      }
+    },
+    {
+      "scenario_id": "research-informed-rejections",
+      "description": "Fixture search findings sharpen strategy and questions while every rejected answer leaves its gap honest and matching stays untouched.",
+      "suites": [
+        "offline"
+      ],
+      "profile": "gapped",
+      "runs": [
+        {
+          "run_id": "researched",
+          "round_text": "",
+          "answers_by_requirement": {
+            "REQ-002": "I am confident I would pick up experimentation quickly if given the chance.",
+            "REQ-005": "I have read about Kubernetes and it seems very interesting to me.",
+            "REQ-006": "I would rate myself highly on causal reasoning in general."
+          },
+          "assessments_by_requirement": {
+            "REQ-002": {
+              "target_requirement_id": "REQ-002",
+              "is_valid": false,
+              "relevance_reason": "The answer expresses confidence, not experience.",
+              "specificity_reason": "No concrete experiment work is described.",
+              "accepted_claim": null
+            },
+            "REQ-005": {
+              "target_requirement_id": "REQ-005",
+              "is_valid": false,
+              "relevance_reason": "The answer describes reading, not operating.",
+              "specificity_reason": "No concrete operational work is described.",
+              "accepted_claim": null
+            },
+            "REQ-006": {
+              "target_requirement_id": "REQ-006",
+              "is_valid": false,
+              "relevance_reason": "The answer is an unsupported self-rating.",
+              "specificity_reason": "No method or application is named.",
+              "accepted_claim": null
+            }
+          },
+          "research_text": "",
+          "search_results": [
+            {
+              "title": "Reported screen themes for growth analysts",
+              "url": "https://example.org/growth-analyst-screens",
+              "snippet": "Recent reports emphasize experiment design walkthroughs and honest gap handling."
+            },
+            {
+              "title": "What growth analytics panels ask",
+              "url": "https://example.org/growth-panels",
+              "snippet": "Panels probe metric trade-offs and stakeholder communication."
+            }
+          ]
+        }
+      ],
+      "reference": {
+        "research_grounded": true,
+        "runs": {
+          "researched": {
+            "expected_trajectory": "three-interrupts",
+            "expected_interrupt_count": 3,
+            "expected_processed_ids": [
+              "REQ-002",
+              "REQ-005",
+              "REQ-006"
+            ],
+            "expected_accepted_ids": [],
+            "expected_rejected_ids": [
+              "REQ-002",
+              "REQ-005",
+              "REQ-006"
+            ],
+            "expected_remaining_gap_ids": [
+              "REQ-002",
+              "REQ-005",
+              "REQ-006"
+            ],
             "expected_package_valid": true,
             "expected_stop_reason": "valid_package_complete"
           }

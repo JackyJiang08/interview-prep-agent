@@ -17,7 +17,7 @@ from ..agent import build_agent_graph
 from ..models import CoverageLevel
 from ..providers import StructuredModel
 from .dataset import scenario_by_id, source_inputs
-from .runtime import CountingProvider, FixtureProvider
+from .runtime import CountingProvider, FixtureProvider, FixtureSearchProvider
 
 # Model types the checkpointer may serialize; explicit registration keeps
 # checkpoint round-trips exact and forward-compatible.
@@ -40,6 +40,8 @@ CHECKPOINT_ALLOWED_TYPES = [
         "PrepPackage",
         "Requirement",
         "RequirementMatch",
+        "ResearchFinding",
+        "ResearchSourceKind",
         "Status",
     )
 ]
@@ -54,11 +56,16 @@ def _run_thread(
     profile: str,
     run: dict[str, Any],
     model: StructuredModel,
+    search: FixtureSearchProvider | None = None,
 ) -> dict[str, Any]:
     """Run one thread to termination, draining interrupts from the script."""
-    compiled = build_agent_graph(model=model, checkpointer=_checkpointer())
+    compiled = build_agent_graph(model=model, checkpointer=_checkpointer(), search=search)
     config = {"configurable": {"thread_id": f"behavior-{uuid4()}"}}
-    inputs = {**source_inputs(profile), "round_text": run["round_text"]}
+    inputs = {
+        **source_inputs(profile),
+        "round_text": run["round_text"],
+        "research_text": run.get("research_text", ""),
+    }
 
     state = compiled.invoke(inputs, config=config)
     interrupt_count = 0
@@ -113,7 +120,31 @@ def _run_thread(
             ),
             "questions": [question.question for question in questions],
         },
+        "research_signature": {
+            "finding_ids": [item.finding_id for item in state.get("research_findings", []) or []],
+            "cited_ids": _cited_research(state),
+        },
     }
+
+
+def _cited_research(state: dict[str, Any]) -> list[str]:
+    """Every SRC- token cited anywhere in the preparation text, sorted."""
+    import re
+
+    texts: list[str] = []
+    strategy = state.get("strategy")
+    if strategy is not None:
+        texts.append(strategy.positioning_statement)
+        texts += [item.rationale for item in strategy.top_priorities]
+        texts += [risk.mitigation for risk in strategy.risks_to_address]
+        texts += [risk.risk for risk in strategy.risks_to_address]
+    for question in state.get("mock_questions", []) or []:
+        texts.append(question.question)
+        texts.append(question.follow_up_probe)
+    tokens: set[str] = set()
+    for text in texts:
+        tokens.update(re.findall(r"\bSRC-\d{3,}\b", text))
+    return sorted(tokens)
 
 
 def run_scenario(inputs: dict[str, Any], *, suite: str) -> dict[str, Any]:
@@ -126,10 +157,16 @@ def run_scenario(inputs: dict[str, Any], *, suite: str) -> dict[str, Any]:
     model_backed_runs: list[bool] = []
     for run in inputs["runs"]:
         if suite == "offline":
+            scripted_run = scripted[run["run_id"]]
             model: StructuredModel = FixtureProvider(
-                scripted[run["run_id"]].get("assessments_by_requirement", {})
+                scripted_run.get("assessments_by_requirement", {})
             )
-            result = _run_thread(profile=profile, run=run, model=model)
+            search = (
+                FixtureSearchProvider(scripted_run["search_results"])
+                if scripted_run.get("search_results")
+                else None
+            )
+            result = _run_thread(profile=profile, run=run, model=model, search=search)
             result["model_backed"] = False
             result["model_call_count"] = 0
         elif suite == "live":
