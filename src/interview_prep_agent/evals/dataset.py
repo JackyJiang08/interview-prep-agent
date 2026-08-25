@@ -17,9 +17,29 @@ from typing import Any
 
 import yaml
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
-JOB_DESCRIPTION_PATH = REPO_ROOT / "examples" / "sample_job_description.txt"
-GAPPED_EVIDENCE_PATH = REPO_ROOT / "examples" / "sample_evidence.yaml"
+
+def _sample_path(name: str) -> Path:
+    """Locate a committed sample input.
+
+    Two layouts must both work: a repository checkout, where the package sits
+    under ``src/`` beside ``examples/``, and an installed package, where the
+    samples travel beside the working directory instead. Checking both keeps
+    the demo suite runnable in a container without duplicating the files into
+    package data.
+    """
+    candidates = (
+        Path(__file__).resolve().parents[3] / "examples" / name,
+        Path.cwd() / "examples" / name,
+    )
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    # Report the checkout path: it is the one a developer can act on.
+    return candidates[0]
+
+
+JOB_DESCRIPTION_PATH = _sample_path("sample_job_description.txt")
+GAPPED_EVIDENCE_PATH = _sample_path("sample_evidence.yaml")
 
 SUITES = {"offline", "live"}
 
