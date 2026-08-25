@@ -60,6 +60,9 @@ jobs:
           npm test
           npm run build
 
+      - name: Container image builds
+        run: docker build -t interview-prep-agent:ci .
+
       - name: End-to-end run on the committed example
         run: |
           interview-prep-agent match \
