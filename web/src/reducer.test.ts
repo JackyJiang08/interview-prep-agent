@@ -180,3 +180,55 @@ describe("unknown input", () => {
     ).toEqual(initialRunState);
   });
 });
+
+describe("research findings", () => {
+  it("carries findings off the package event", () => {
+    const state = play([
+      msg({
+        type: "package",
+        package: { requirements: [], matches: [], focus_areas: [], strategy: null, mock_questions: [] },
+        evidence: [],
+        research: [
+          {
+            finding_id: "SRC-001",
+            source_kind: "search",
+            title: "Reported themes",
+            summary: "A summary.",
+            url: "https://example.org/a",
+            retrieved_for: "a query",
+          },
+        ],
+      }),
+      msg({ type: "done", stop_reason: "valid_package_complete" }),
+    ]);
+    expect(state.research).toHaveLength(1);
+    expect(state.research[0].finding_id).toBe("SRC-001");
+    expect(state.research[0].url).toBe("https://example.org/a");
+  });
+
+  it("defaults to no findings when the package carries none", () => {
+    const state = play([
+      msg({
+        type: "package",
+        package: { requirements: [], matches: [], focus_areas: [], strategy: null, mock_questions: [] },
+        evidence: [],
+      }),
+    ]);
+    expect(state.research).toEqual([]);
+  });
+
+  it("summarizes the research stage by finding count", () => {
+    const none = play([
+      msg({ type: "node_update", node: "research", delta: { research_findings: [] } }),
+    ]);
+    expect(none.stages[0].summary).toContain("no role research");
+    const some = play([
+      msg({
+        type: "node_update",
+        node: "research",
+        delta: { research_findings: [{ finding_id: "SRC-001" }, { finding_id: "SRC-002" }] },
+      }),
+    ]);
+    expect(some.stages[0].summary).toBe("2 research findings gathered");
+  });
+});

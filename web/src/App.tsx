@@ -125,7 +125,11 @@ function RunScreen({
           </div>
         )}
         {state.prepPackage !== null && (
-          <PackageView prepPackage={state.prepPackage} evidence={state.evidence} />
+          <PackageView
+            prepPackage={state.prepPackage}
+            evidence={state.evidence}
+            research={state.research}
+          />
         )}
       </section>
     </div>

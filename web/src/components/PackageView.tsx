@@ -1,17 +1,29 @@
+import type { ReactNode } from "react";
 import { useRef, useState } from "react";
 
-import type { EvidenceItem, PrepPackage, Requirement } from "../types";
+import type {
+  EvidenceItem,
+  PrepPackage,
+  Requirement,
+  ResearchFinding,
+} from "../types";
+
+const SRC_TOKEN = /\bSRC-\d{3,}\b/g;
 
 export function PackageView({
   prepPackage,
   evidence,
+  research = [],
 }: {
   prepPackage: PrepPackage;
   evidence: EvidenceItem[];
+  research?: ResearchFinding[];
 }) {
   const [openItem, setOpenItem] = useState<EvidenceItem | null>(null);
+  const [openFinding, setOpenFinding] = useState<ResearchFinding | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const byId = new Map(evidence.map((item) => [item.id, item]));
+  const findingsById = new Map(research.map((item) => [item.finding_id, item]));
   const requirements = new Map(
     prepPackage.requirements.map((item) => [item.id, item]),
   );
@@ -19,12 +31,46 @@ export function PackageView({
   const open = (evidenceId: string) => {
     const item = byId.get(evidenceId);
     if (item === undefined) return;
+    setOpenFinding(null);
     setOpenItem(item);
+    requestAnimationFrame(() => dialogRef.current?.showModal());
+  };
+  const openResearch = (findingId: string) => {
+    const item = findingsById.get(findingId);
+    if (item === undefined) return;
+    setOpenItem(null);
+    setOpenFinding(item);
     requestAnimationFrame(() => dialogRef.current?.showModal());
   };
   const close = () => {
     dialogRef.current?.close();
     setOpenItem(null);
+    setOpenFinding(null);
+  };
+
+  // Preparation prose may cite findings inline by identifier; render those
+  // tokens as chips that open the finding, leaving the rest of the text as is.
+  const withResearchChips = (text: string) => {
+    const parts = text.split(SRC_TOKEN);
+    const tokens = text.match(SRC_TOKEN) ?? [];
+    return parts.flatMap((part, index) => {
+      const token = tokens[index];
+      const chunk: ReactNode[] = [<span key={`t-${index}`}>{part}</span>];
+      if (token !== undefined) {
+        chunk.push(
+          <button
+            key={`c-${index}`}
+            type="button"
+            className="chip"
+            onClick={() => openResearch(token)}
+            aria-label={`Open role research ${token}`}
+          >
+            {token}
+          </button>,
+        );
+      }
+      return chunk;
+    });
   };
 
   const chip = (evidenceId: string) => (
@@ -116,13 +162,13 @@ export function PackageView({
 
       <section className="package-section" aria-label="Strategy">
         <h2>Strategy</h2>
-        <p>{prepPackage.strategy.positioning_statement}</p>
+        <p>{withResearchChips(prepPackage.strategy.positioning_statement)}</p>
         {prepPackage.strategy.top_priorities.map((item) => (
           <div className="qa" key={`priority-${item.requirement_id}`}>
             <h3>
               <code>{item.requirement_id}</code> {item.preparation_theme}
             </h3>
-            <p className="probe">{item.rationale}</p>
+            <p className="probe">{withResearchChips(item.rationale)}</p>
             <p>{item.evidence_ids.map(chip)}</p>
           </div>
         ))}
@@ -134,7 +180,7 @@ export function PackageView({
                 <h3>
                   <code>{risk.requirement_id}</code> {risk.risk}
                 </h3>
-                <p className="probe">{risk.mitigation}</p>
+                <p className="probe">{withResearchChips(risk.mitigation)}</p>
               </div>
             ))}
           </>
@@ -148,7 +194,7 @@ export function PackageView({
             <h3>{question.question}</h3>
             <p className="probe">
               Probes <code>{question.requirement_id}</code> - follow-up:{" "}
-              {question.follow_up_probe}
+              {withResearchChips(question.follow_up_probe)}
             </p>
             <p>{question.evidence_ids.map(chip)}</p>
             <ul>
@@ -160,9 +206,36 @@ export function PackageView({
         ))}
       </section>
 
+      {research.length > 0 && (
+        <section className="package-section" aria-label="Role research">
+          <h2>Role research</h2>
+          <p className="empty-note">
+            Role intelligence gathered for preparation. It informs emphasis and
+            question realism; it is never candidate evidence and never supports
+            a match.
+          </p>
+          <p>
+            {research.map((item) => (
+              <button
+                key={item.finding_id}
+                type="button"
+                className="chip"
+                onClick={() => openResearch(item.finding_id)}
+                aria-label={`Open role research ${item.finding_id}`}
+              >
+                {item.finding_id}
+              </button>
+            ))}
+          </p>
+        </section>
+      )}
+
       <dialog ref={dialogRef} className="evidence-pop" onClose={close}>
         {openItem !== null && (
           <EvidenceDetail item={openItem} requirements={requirements} onClose={close} />
+        )}
+        {openFinding !== null && (
+          <ResearchDetail finding={openFinding} onClose={close} />
         )}
       </dialog>
     </div>
@@ -212,6 +285,45 @@ function EvidenceDetail({
           <p>Source: {item.source ?? "evidence corpus"}</p>
         </div>
       )}
+      <button className="primary" type="button" onClick={onClose}>
+        Close
+      </button>
+    </div>
+  );
+}
+
+function ResearchDetail({
+  finding,
+  onClose,
+}: {
+  finding: ResearchFinding;
+  onClose: () => void;
+}) {
+  return (
+    <div>
+      <h3>
+        <code>{finding.finding_id}</code> {finding.title}
+      </h3>
+      <p>{finding.summary}</p>
+      <div className="prov">
+        <p>
+          Role intelligence, not candidate evidence. It informs what to
+          emphasize and how realistic a question sounds; it can never support a
+          match or become something the candidate claims.
+        </p>
+        <p>
+          {finding.source_kind === "search"
+            ? `Found by search for: ${finding.retrieved_for}`
+            : "Provided by the user."}
+        </p>
+        {finding.url != null && finding.url !== "" && (
+          <p>
+            <a href={finding.url} rel="noreferrer noopener" target="_blank">
+              {finding.url}
+            </a>
+          </p>
+        )}
+      </div>
       <button className="primary" type="button" onClick={onClose}>
         Close
       </button>

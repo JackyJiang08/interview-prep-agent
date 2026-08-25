@@ -7,7 +7,9 @@ export interface CreateSessionBody {
   evidence_text?: string;
   evidence_format?: "yaml" | "markdown";
   round_text?: string;
+  research_text?: string;
   gemini_api_key?: string;
+  tavily_api_key?: string;
 }
 
 export async function fetchDemos(): Promise<Demo[]> {

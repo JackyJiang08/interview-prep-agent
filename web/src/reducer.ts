@@ -2,7 +2,7 @@
 // through here as an untyped value and comes out as UI state; components
 // never read raw messages. Unknown messages change nothing.
 
-import type { EvidenceItem, PrepPackage } from "./types";
+import type { EvidenceItem, PrepPackage, ResearchFinding } from "./types";
 
 export type Phase =
   | "connecting"
@@ -41,6 +41,7 @@ export interface RunState {
   resolutions: Resolution[];
   prepPackage: PrepPackage | null;
   evidence: EvidenceItem[];
+  research: ResearchFinding[];
   stopReason: string | null;
   error: { category: string; message: string } | null;
 }
@@ -52,6 +53,7 @@ export const initialRunState: RunState = {
   resolutions: [],
   prepPackage: null,
   evidence: [],
+  research: [],
   stopReason: null,
   error: null,
 };
@@ -108,10 +110,14 @@ function applyMessage(state: RunState, raw: unknown): RunState {
       const evidence = Array.isArray(message.evidence)
         ? (message.evidence as EvidenceItem[])
         : [];
+      const research = Array.isArray(message.research)
+        ? (message.research as ResearchFinding[])
+        : [];
       return {
         ...state,
         prepPackage: (message.package as PrepPackage) ?? null,
         evidence,
+        research,
       };
     }
     case "done": {
@@ -201,6 +207,13 @@ function summarize(node: string, delta: Record<string, unknown>): string {
       return delta.question_budget_left === false
         ? "question ceiling reached; moving to final generation"
         : "gap queue empty; moving to final generation";
+    }
+    case "research": {
+      const findings = delta.research_findings;
+      const count = Array.isArray(findings) ? findings.length : 0;
+      return count === 0
+        ? "no role research supplied; preparing from the posting alone"
+        : `${count} research finding${count === 1 ? "" : "s"} gathered`;
     }
     case "ask":
       return "waiting for one factual answer";

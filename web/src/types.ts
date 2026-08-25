@@ -90,6 +90,15 @@ export interface PrepPackage {
   mock_questions: MockQuestion[];
 }
 
+export interface ResearchFinding {
+  finding_id: string;
+  source_kind: "search" | "provided";
+  title: string;
+  summary: string;
+  url?: string | null;
+  retrieved_for: string;
+}
+
 export interface Demo {
   demo_id: string;
   description: string;

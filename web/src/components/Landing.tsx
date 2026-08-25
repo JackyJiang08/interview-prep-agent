@@ -8,6 +8,7 @@ export function Landing({ onStart }: { onStart: (sessionId: string) => void }) {
   const [ownKey, setOwnKey] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [researchText, setResearchText] = useState("");
 
   useEffect(() => {
     fetchDemos()
@@ -44,18 +45,34 @@ export function Landing({ onStart }: { onStart: (sessionId: string) => void }) {
               type="button"
               className="demo-card"
               disabled={busy}
-              onClick={() => start({ mode: "demo", demo_id: demo.demo_id })}
+              onClick={() =>
+                start({
+                  mode: "demo",
+                  demo_id: demo.demo_id,
+                  research_text: researchText,
+                })
+              }
             >
               <span className="demo-id">{demo.demo_id}</span>
               <p>{demo.description}</p>
             </button>
           ))}
         </div>
+        <label>
+          Role research, optional - notes or excerpts you have gathered. They
+          sharpen strategy and questions; they never become evidence and never
+          affect matching.
+          <textarea
+            rows={3}
+            value={researchText}
+            onChange={(event) => setResearchText(event.target.value)}
+          />
+        </label>
       </section>
 
       <section className="own-key" aria-label="Run with your own key">
         {ownKey ? (
-          <OwnKeyForm busy={busy} onSubmit={start} />
+          <OwnKeyForm busy={busy} researchText={researchText} onSubmit={start} />
         ) : (
           <p className="empty-note">
             Or{" "}
@@ -72,9 +89,11 @@ export function Landing({ onStart }: { onStart: (sessionId: string) => void }) {
 
 function OwnKeyForm({
   busy,
+  researchText,
   onSubmit,
 }: {
   busy: boolean;
+  researchText: string;
   onSubmit: (body: CreateSessionBody) => void;
 }) {
   const [jdText, setJdText] = useState("");
@@ -82,6 +101,7 @@ function OwnKeyForm({
   const [format, setFormat] = useState<"yaml" | "markdown">("yaml");
   const [roundText, setRoundText] = useState("");
   const [apiKey, setApiKey] = useState("");
+  const [searchKey, setSearchKey] = useState("");
 
   return (
     <form
@@ -93,7 +113,9 @@ function OwnKeyForm({
           evidence_text: evidenceText,
           evidence_format: format,
           round_text: roundText,
+          research_text: researchText,
           gemini_api_key: apiKey,
+          tavily_api_key: searchKey || undefined,
         });
       }}
     >
@@ -155,8 +177,17 @@ function OwnKeyForm({
           required
         />
       </label>
+      <label>
+        Search API key, optional - enables the role research search path
+        <input
+          type="password"
+          value={searchKey}
+          onChange={(event) => setSearchKey(event.target.value)}
+          autoComplete="off"
+        />
+      </label>
       <p className="key-notice">
-        The key is held in this page's memory, sent once to create the session,
+        Keys are held in this page's memory, sent once to create the session,
         never stored in this browser, and dropped with the session on the
         server.
       </p>
