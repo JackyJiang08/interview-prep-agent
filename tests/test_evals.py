@@ -44,7 +44,7 @@ def _expect_invalid(payload, match: str):
 def test_the_committed_dataset_validates():
     payload = load_dataset()
     assert payload["dataset_name"] == "interview-prep-agent-behavior"
-    assert len(payload["scenarios"]) == 5
+    assert len(payload["scenarios"]) == 6
 
 
 def test_duplicate_scenario_ids_are_rejected():

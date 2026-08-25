@@ -152,6 +152,7 @@ def test_ttl_cleanup_evicts_expired_sessions(client):
 # --- credential hygiene -------------------------------------------------------
 
 SECRET = "gm-key-TESTSECRET-3141"
+SEARCH_SECRET = "tv-key-TESTSECRET-2718"
 
 
 def test_the_key_never_appears_in_logs_views_or_artifacts(client, caplog):
@@ -163,23 +164,28 @@ def test_the_key_never_appears_in_logs_views_or_artifacts(client, caplog):
                 "jd_text": "Requirements\n- Strong SQL for analysis",
                 "evidence_text": "- id: EV-001\n  summary: SQL analysis work",
                 "gemini_api_key": SECRET,
+                "tavily_api_key": SEARCH_SECRET,
             },
         )
         assert response.status_code == 201
         session_id = response.json()["session_id"]
         view = client.get(f"/api/sessions/{session_id}").json()
 
-    assert SECRET not in caplog.text
-    assert SECRET not in response.text
-    assert SECRET not in str(view)
+    for secret in (SECRET, SEARCH_SECRET):
+        assert secret not in caplog.text
+        assert secret not in response.text
+        assert secret not in str(view)
 
     store = client.app.state.store
     session = store.get(session_id)
-    assert session.api_key == SECRET  # held in memory for the provider
+    assert session.api_key == SECRET  # held in memory for the providers
+    assert session.search_api_key == SEARCH_SECRET
     for path in session.artifacts_dir.rglob("*"):
-        assert SECRET not in path.read_text(encoding="utf-8")
+        content = path.read_text(encoding="utf-8")
+        assert SECRET not in content and SEARCH_SECRET not in content
     store.drop(session_id)
     assert session.api_key is None  # dropped with the session
+    assert session.search_api_key is None
 
 
 # --- isolation ----------------------------------------------------------------
@@ -244,3 +250,53 @@ def test_oversized_answer_is_refused_and_the_run_continues():
             ws.send_json({"type": "answer", "text": answers[message["requirement_id"]][:30]})
             follow_up = ws.receive_json()
             assert follow_up["type"] in ("node_update", "interrupt")
+
+
+# --- research plumbing --------------------------------------------------------
+
+
+def test_research_text_is_accepted_in_both_modes(client):
+    demo = client.post(
+        "/api/sessions",
+        json={
+            "mode": "demo",
+            "demo_id": MIXED_DEMO,
+            "research_text": "A note about the reported screen themes.",
+        },
+    )
+    assert demo.status_code == 201
+    store = client.app.state.store
+    session = store.get(demo.json()["session_id"])
+    assert session.research_text.startswith("A note")
+
+
+def test_oversized_research_text_is_a_structured_413():
+    from interview_prep_agent.config import Settings
+    from interview_prep_agent.server.app import create_app
+
+    settings = Settings(max_research_chars=10)
+    with TestClient(create_app(settings)) as client:
+        response = client.post(
+            "/api/sessions",
+            json={"mode": "demo", "demo_id": MIXED_DEMO, "research_text": "x" * 11},
+        )
+    assert response.status_code == 413
+    assert response.json()["error"]["category"] == "input_too_large"
+
+
+def test_package_event_carries_research_findings(client):
+    answers = _demo_answers(client, MIXED_DEMO)
+    created = client.post(
+        "/api/sessions",
+        json={
+            "mode": "demo",
+            "demo_id": MIXED_DEMO,
+            "research_text": "Reported theme: experiment walkthroughs are common.",
+        },
+    )
+    session_id = created.json()["session_id"]
+    with client.websocket_connect(f"/api/sessions/{session_id}/stream") as ws:
+        seen = _drain(ws, answers)
+    research = seen["package"][0]["research"]
+    assert [item["finding_id"] for item in research] == ["SRC-001"]
+    assert research[0]["source_kind"] == "provided"
