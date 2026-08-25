@@ -1,0 +1,6 @@
+# The optional web session layer. The offline core never imports these;
+# install alongside requirements.txt to run `interview-prep-agent serve`.
+-r requirements.txt
+fastapi==0.141.1
+uvicorn==0.52.4
+websockets==15.0.1

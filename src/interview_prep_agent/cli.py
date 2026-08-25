@@ -180,6 +180,20 @@ def build_parser() -> argparse.ArgumentParser:
     )
     evaluation.set_defaults(handler=run_eval_command)
 
+    serve = subcommands.add_parser(
+        "serve",
+        help="run the web session layer",
+        description=(
+            "Serve the web session layer: sessions over the agent with a "
+            "WebSocket stream for interrupts and answers. Requires the "
+            "server extra (pip install -r requirements-server.txt)."
+        ),
+    )
+    serve.add_argument("--host", default="127.0.0.1", help="bind address")
+    serve.add_argument("--port", type=int, default=8000, help="bind port")
+    serve.add_argument("--config", type=Path, default=None, help="settings file")
+    serve.set_defaults(handler=run_serve_command)
+
     return parser
 
 
@@ -353,6 +367,25 @@ def run_eval_command(args: argparse.Namespace) -> int:
         print(f"error: {error}", file=sys.stderr)
         return 1
     return 0 if all_green else 1
+
+
+def run_serve_command(args: argparse.Namespace) -> int:
+    """Handle the ``serve`` subcommand."""
+    try:
+        import uvicorn
+
+        from .server import create_app
+    except ImportError:
+        print(
+            "error: the server extra is not installed; run "
+            "'pip install -r requirements-server.txt'",
+            file=sys.stderr,
+        )
+        return 1
+
+    settings = load_settings(args.config)
+    uvicorn.run(create_app(settings), host=args.host, port=args.port)
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:

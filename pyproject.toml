@@ -26,6 +26,11 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0,<9"]
+server = [
+    "fastapi>=0.110,<1",
+    "uvicorn>=0.30,<1",
+    "websockets>=12,<16",
+]
 
 [project.scripts]
 interview-prep-agent = "interview_prep_agent.cli:main"
