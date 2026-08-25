@@ -105,10 +105,28 @@ az role assignment create \
   --scope "/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RG"
 
 # Trust GitHub Actions running on main in this repository.
+#
+# The subject must match the assertion GitHub actually presents, and that
+# comes in two shapes. Most repositories present the plain form below. Some
+# present an ID-qualified form instead — owner@ownerID/repo@repoID — in which
+# case this credential does not match and the login fails with AADSTS700213,
+# quoting the subject it did present. The reliable move is to create the
+# plain one now, and if the first run fails that way, read the presented
+# subject out of the error and create a second credential for it: an app
+# registration may hold several, and covering both shapes costs nothing.
 az ad app federated-credential create --id "$APP_ID" --parameters '{
   "name": "github-main",
   "issuer": "https://token.actions.githubusercontent.com",
   "subject": "repo:<your-github-user>/interview-prep-agent:ref:refs/heads/main",
+  "audiences": ["api://AzureADTokenExchange"]
+}'
+
+# Only if the first run failed with AADSTS700213, using the subject the error
+# quoted verbatim:
+az ad app federated-credential create --id "$APP_ID" --parameters '{
+  "name": "github-main-ids",
+  "issuer": "https://token.actions.githubusercontent.com",
+  "subject": "repo:<owner>@<ownerID>/<repo>@<repoID>:ref:refs/heads/main",
   "audiences": ["api://AzureADTokenExchange"]
 }'
 
