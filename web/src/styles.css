@@ -1,0 +1,139 @@
+:root {
+  --ink: #1a1a1a;
+  --muted: #6b6b6b;
+  --line: #e2e2e0;
+  --paper: #fbfbfa;
+  --card: #ffffff;
+  --accent: #1f4f8f;
+  --accent-soft: #eef3fa;
+  --admit: #1c6b45;
+  --admit-soft: #edf6f0;
+  --reject-soft: #f6f1e8;
+  --reject-line: #8a6d3b;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 16px/1.55 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+}
+
+code, .mono {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.92em;
+}
+
+.app-header {
+  border-bottom: 1px solid var(--line);
+  background: var(--card);
+  padding: 14px 24px;
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.app-header h1 { font-size: 17px; margin: 0; letter-spacing: -0.01em; }
+.app-header .descriptor { color: var(--muted); font-size: 14px; }
+.app-header a { margin-left: auto; color: var(--accent); font-size: 14px; text-decoration: none; }
+.app-header a:hover { text-decoration: underline; }
+
+main { max-width: 1080px; margin: 0 auto; padding: 28px 24px 80px; }
+
+h2 { font-size: 15px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 12px; }
+h3 { font-size: 16px; margin: 0 0 6px; }
+
+.landing-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); margin-bottom: 40px; }
+.demo-card {
+  background: var(--card); border: 1px solid var(--line); border-radius: 6px;
+  padding: 16px 18px; text-align: left; cursor: pointer; font: inherit; color: inherit;
+}
+.demo-card:hover, .demo-card:focus-visible { border-color: var(--accent); outline: none; }
+.demo-card .demo-id { font-weight: 600; }
+.demo-card p { color: var(--muted); font-size: 14px; margin: 6px 0 0; }
+
+.own-key { border-top: 1px solid var(--line); padding-top: 24px; }
+.own-key form { display: grid; gap: 14px; max-width: 640px; }
+label { display: grid; gap: 4px; font-size: 14px; color: var(--muted); }
+textarea, input[type="text"], input[type="password"] {
+  font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 4px;
+  background: var(--card); color: var(--ink);
+}
+textarea:focus, input:focus { border-color: var(--accent); outline: none; }
+.key-notice { font-size: 13px; color: var(--muted); }
+.format-toggle { display: flex; gap: 16px; font-size: 14px; color: var(--ink); }
+.format-toggle label { display: flex; flex-direction: row; gap: 6px; align-items: center; }
+
+button.primary {
+  font: inherit; font-weight: 600; padding: 9px 18px; border-radius: 4px;
+  border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer;
+  justify-self: start;
+}
+button.primary:disabled { opacity: 0.5; cursor: default; }
+button.plain {
+  font: inherit; background: none; border: none; color: var(--accent);
+  cursor: pointer; padding: 0; text-decoration: underline;
+}
+
+.run-layout { display: grid; grid-template-columns: 300px 1fr; gap: 32px; }
+@media (max-width: 800px) { .run-layout { grid-template-columns: 1fr; } }
+
+.stage-rail { border-left: 2px solid var(--line); padding-left: 16px; align-self: start; }
+.stage-rail ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.stage-rail li { font-size: 14px; }
+.stage-rail .stage-name { font-weight: 600; }
+.stage-rail .stage-summary { color: var(--muted); }
+.stage-rail li.current .stage-name::after { content: " - running"; color: var(--accent); font-weight: 400; }
+
+.interrupt-card, .resolution-card, .terminal-card {
+  background: var(--card); border: 1px solid var(--line); border-radius: 6px;
+  padding: 20px 22px; margin-bottom: 18px;
+}
+.interrupt-card { border-color: var(--accent); }
+.interrupt-card .req { color: var(--muted); font-size: 14px; margin-bottom: 6px; }
+.interrupt-card form { display: grid; gap: 12px; margin-top: 12px; }
+
+.verdict { font-size: 13px; font-weight: 700; letter-spacing: 0.08em; }
+.resolution-card.admitted { background: var(--admit-soft); border-color: var(--admit); }
+.resolution-card.admitted .verdict { color: var(--admit); }
+.resolution-card.rejected { background: var(--reject-soft); border-color: var(--reject-line); }
+.resolution-card.rejected .verdict { color: var(--reject-line); }
+.resolution-card .claim { margin: 8px 0 0; }
+.resolution-card .reason { color: var(--muted); font-size: 14px; margin: 8px 0 0; }
+
+.chip {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums; font-size: 12.5px;
+  border: 1px solid var(--line); border-radius: 999px; padding: 1px 9px;
+  background: var(--accent-soft); color: var(--accent); cursor: pointer;
+}
+.chip:hover, .chip:focus-visible { border-color: var(--accent); outline: none; }
+
+.coverage { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; }
+.coverage.full { color: var(--admit); }
+.coverage.partial { color: var(--reject-line); }
+.coverage.gap { color: var(--ink); }
+
+.package-section { margin-bottom: 34px; }
+.package-section table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+.package-section th { text-align: left; color: var(--muted); font-weight: 500; font-size: 13px; border-bottom: 1px solid var(--line); padding: 6px 10px 6px 0; }
+.package-section td { border-bottom: 1px solid var(--line); padding: 9px 10px 9px 0; vertical-align: top; }
+.qa { border: 1px solid var(--line); border-radius: 6px; background: var(--card); padding: 14px 16px; margin-bottom: 10px; }
+.qa .probe { color: var(--muted); font-size: 14px; }
+.qa ul { margin: 8px 0 0; padding-left: 20px; font-size: 14px; }
+
+.evidence-pop {
+  border: 1px solid var(--ink); border-radius: 6px; padding: 16px 18px;
+  max-width: 560px; background: var(--card);
+}
+.evidence-pop::backdrop { background: rgba(20, 20, 20, 0.25); }
+.evidence-pop .prov { color: var(--muted); font-size: 14px; margin-top: 8px; }
+.evidence-pop button { margin-top: 12px; }
+
+.terminal-card .stop { font-weight: 600; }
+.terminal-card.failed { border-color: var(--reject-line); }
+.empty-note { color: var(--muted); font-size: 14.5px; }
+.error-line { color: var(--reject-line); font-size: 14.5px; }

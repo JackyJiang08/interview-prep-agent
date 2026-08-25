@@ -43,3 +43,7 @@ htmlcov/
 .vscode/
 .idea/
 .DS_Store
+
+# Web app: dependencies and build output are never committed.
+web/node_modules/
+web/dist/
