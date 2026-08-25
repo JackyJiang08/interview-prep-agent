@@ -50,6 +50,18 @@ class Settings(BaseModel):
     max_questions_per_run: int | None = Field(default=None, ge=0)
     min_clarification_length: int = Field(default=24, ge=0)
 
+    # Bounds on the web session layer, the same discipline the agent has:
+    # exceeding any of them is a structured refusal, never a crash. CORS
+    # defaults to no cross-origin access at all.
+    max_concurrent_sessions: int = Field(default=8, ge=1)
+    max_sessions_per_ip: int = Field(default=3, ge=1)
+    session_ttl_seconds: int = Field(default=1800, ge=1)
+    max_jd_chars: int = Field(default=20_000, ge=1)
+    max_evidence_chars: int = Field(default=50_000, ge=1)
+    max_answer_chars: int = Field(default=4_000, ge=1)
+    max_round_chars: int = Field(default=2_000, ge=1)
+    cors_origins: list[str] = Field(default_factory=list)
+
 
 def load_settings(path: Path | None = None) -> Settings:
     """Load settings from YAML.

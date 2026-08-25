@@ -555,6 +555,7 @@ def run_agent(
     matcher: Matcher | None = None,
     round_text: str = "",
     thread_id: str = "agent",
+    on_event: Callable[[dict[str, Any]], None] | None = None,
 ) -> tuple[AgentState, list[dict[str, Any]]]:
     """Run the loop to termination, answering interrupts via the callback.
 
@@ -577,6 +578,9 @@ def run_agent(
         matcher: Stage 2 implementation for the inner workflow.
         round_text: Optional freeform description of the upcoming round.
         thread_id: Checkpoint thread identity for interrupt and resume.
+        on_event: Optional observer called with each trace entry as it is
+            recorded. Purely additive — the trace and the return value are
+            identical with or without it.
 
     Returns:
         The final state and the ordered trace.
@@ -605,12 +609,17 @@ def run_agent(
 
     trace: list[dict[str, Any]] = []
 
+    def append(entry: dict[str, Any]) -> None:
+        trace.append(entry)
+        if on_event is not None:
+            on_event(entry)
+
     def record(event: dict[str, Any]) -> list[dict[str, Any]]:
         pending: list[dict[str, Any]] = []
         for node, update in event.items():
             if node == "parse_round":
                 parsed = update.get("round_context")
-                trace.append(
+                append(
                     {
                         "node": node,
                         "round": parsed.model_dump(mode="json", exclude_none=True)
@@ -620,7 +629,7 @@ def run_agent(
                 )
             elif node == "observe":
                 current = update.get("current_gap")
-                trace.append(
+                append(
                     {
                         "node": node,
                         "selected": current.id if current is not None else None,
@@ -634,13 +643,13 @@ def run_agent(
                 )
             elif node == "__interrupt__":
                 pending.extend(item.value for item in update)
-                trace.append({"node": "ask", "interrupt": [item.value for item in update]})
+                append({"node": "ask", "interrupt": [item.value for item in update]})
             elif node == "assess_and_admit":
                 entry: dict[str, Any] = {"node": node}
                 records = update.get("clarification_records") or []
                 if records:
                     entry["record"] = records[0].model_dump(mode="json", exclude_none=True)
-                trace.append(entry)
+                append(entry)
             elif node in ("generate_initial", "generate_final"):
                 entry = {
                     "node": node,
@@ -650,9 +659,9 @@ def run_agent(
                     entry["note"] = update["final_note"]
                 if not update.get("package_valid") and update.get("validation_errors"):
                     entry["errors"] = update["validation_errors"]
-                trace.append(entry)
+                append(entry)
             elif node == "invalid":
-                trace.append({"node": node})
+                append({"node": node})
         return pending
 
     stream_input: Any = {
@@ -672,7 +681,7 @@ def run_agent(
         stream_input = Command(resume=answer)
 
     state: AgentState = graph.get_state(config).values
-    trace.append({"node": "stop", "stop_reason": state.get("stop_reason")})
+    append({"node": "stop", "stop_reason": state.get("stop_reason")})
 
     if output_dir is not None and settings.write_stage_artifacts:
         output_dir = Path(output_dir)
