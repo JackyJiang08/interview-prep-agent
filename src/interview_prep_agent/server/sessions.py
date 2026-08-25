@@ -45,8 +45,11 @@ class Session:
     demo_id: str | None = None
     # Live-mode credentials. In memory only, for provider construction;
     # excluded from every serialization of the session and dropped with it.
+    provider: str = "gemini"
     api_key: str | None = None
     search_api_key: str | None = None
+    azure_endpoint: str | None = None
+    azure_deployment: str | None = None
     status: str = "created"
     stop_reason: str | None = None
     error: dict[str, str] | None = None
@@ -60,6 +63,7 @@ class Session:
         return {
             "session_id": self.session_id,
             "mode": self.mode,
+            "provider": self.provider if self.mode == "live" else None,
             "demo_id": self.demo_id,
             "status": self.status,
             "stop_reason": self.stop_reason,
@@ -150,9 +154,11 @@ class SessionStore:
         session = self._sessions.pop(session_id, None)
         if session is None:
             return
-        # The keys die with the session.
+        # The credentials die with the session.
         session.api_key = None
         session.search_api_key = None
+        session.azure_endpoint = None
+        session.azure_deployment = None
         shutil.rmtree(session.artifacts_dir, ignore_errors=True)
 
     def active_count(self) -> int:

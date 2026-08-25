@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -22,7 +23,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from ..config import Settings, load_settings
-from ..providers import ProviderError
+from ..providers import PROVIDERS, ProviderError
 from .demo import demo_inputs, demo_provider, list_demos
 from .driver import DISCONNECTED, start_run
 from .sessions import SessionRefused, SessionStore
@@ -40,8 +41,12 @@ class CreateSession(BaseModel):
     evidence_format: str = Field(default="yaml", pattern="^(yaml|markdown)$")
     round_text: str = ""
     research_text: str = ""
+    provider: str = Field(default="gemini", pattern="^(gemini|azure)$")
     gemini_api_key: str | None = None
     tavily_api_key: str | None = None
+    azure_api_key: str | None = None
+    azure_endpoint: str | None = None
+    azure_deployment: str | None = None
 
 
 def _refusal(status_code: int, category: str, message: str) -> JSONResponse:
@@ -83,6 +88,30 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def _refused(_request: Request, exc: SessionRefused) -> JSONResponse:
         return _refusal(exc.status_code, exc.category, exc.message)
 
+    @app.get("/api/health")
+    async def health() -> dict[str, Any]:
+        """Liveness and capability probe.
+
+        Demo mode is always available: it needs no credentials. Live mode is
+        available per session, when the client supplies its own; the server
+        holds no model keys of its own.
+        """
+        from .. import __version__
+
+        return {
+            "status": "ok",
+            "version": __version__,
+            "modes": {
+                "demo": True,
+                "live": {
+                    "available_per_session": True,
+                    "providers": list(PROVIDERS),
+                    "server_side_credentials": False,
+                },
+            },
+            "active_sessions": store.active_count(),
+        }
+
     @app.get("/api/demos")
     async def demos() -> dict[str, Any]:
         return {"demos": list_demos()}
@@ -115,19 +144,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "round_text": body.round_text,
             }
 
-        if body.mode == "live" and not body.gemini_api_key:
-            return _refusal(
-                400,
-                "missing_credentials",
-                "live mode needs gemini_api_key; use demo mode to run without one",
-            )
+        if body.mode == "live":
+            refusal = _missing_credentials(body)
+            if refusal is not None:
+                return refusal
 
         session = store.create(
             client_ip=client_ip,
             mode=body.mode,
             demo_id=body.demo_id if body.mode == "demo" else None,
-            api_key=body.gemini_api_key if body.mode == "live" else None,
+            provider=body.provider,
+            api_key=(
+                (body.gemini_api_key if body.provider == "gemini" else body.azure_api_key)
+                if body.mode == "live"
+                else None
+            ),
             search_api_key=body.tavily_api_key if body.mode == "live" else None,
+            azure_endpoint=body.azure_endpoint if body.mode == "live" else None,
+            azure_deployment=body.azure_deployment if body.mode == "live" else None,
             research_text=body.research_text,
             **inputs,
         )
@@ -188,11 +222,62 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # The built web app, when present. Mounted last, so /api and the socket
     # always win; absent in development and in CI, where only the API runs.
-    web_dist = Path(__file__).resolve().parents[3] / "web" / "dist"
-    if web_dist.is_dir():
+    web_dist = _find_web_dist()
+    if web_dist is not None:
         app.mount("/", StaticFiles(directory=web_dist, html=True), name="web")
 
     return app
+
+
+def _find_web_dist() -> Path | None:
+    """Locate the built web app, or None when it has not been built.
+
+    Three candidates, in order: an explicit override, the working directory
+    (how the container is laid out, with the package installed into
+    site-packages), and the repository checkout relative to this file (how a
+    development run is laid out).
+    """
+    override = os.environ.get("WEB_DIST_DIR")
+    candidates = [
+        Path(override) if override else None,
+        Path.cwd() / "web" / "dist",
+        Path(__file__).resolve().parents[3] / "web" / "dist",
+    ]
+    for candidate in candidates:
+        if candidate is not None and candidate.is_dir():
+            return candidate
+    return None
+
+
+def _missing_credentials(body: CreateSession) -> JSONResponse | None:
+    """Refuse a live session whose provider credentials are incomplete."""
+    if body.provider == "gemini":
+        if not body.gemini_api_key:
+            return _refusal(
+                400,
+                "missing_credentials",
+                "live mode with the gemini provider needs gemini_api_key; "
+                "use demo mode to run without one",
+            )
+        return None
+    missing = [
+        name
+        for name, value in (
+            ("azure_api_key", body.azure_api_key),
+            ("azure_endpoint", body.azure_endpoint),
+            ("azure_deployment", body.azure_deployment),
+        )
+        if not value
+    ]
+    if missing:
+        return _refusal(
+            400,
+            "missing_credentials",
+            "live mode with the azure provider needs "
+            + " and ".join(missing)
+            + "; use demo mode to run without credentials",
+        )
+    return None
 
 
 def _oversize(body: CreateSession, settings: Settings) -> JSONResponse | None:
@@ -219,7 +304,14 @@ def _build_session_model(session):
     try:
         from ..providers import build_model
 
-        return build_model(api_key=session.api_key)
+        if session.provider == "azure":
+            return build_model(
+                "azure",
+                api_key=session.api_key,
+                endpoint=session.azure_endpoint,
+                deployment=session.azure_deployment,
+            )
+        return build_model("gemini", api_key=session.api_key)
     except ProviderError as error:
         session.status = "failed"
         session.error = {"category": "provider", "message": str(error)}

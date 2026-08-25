@@ -147,7 +147,7 @@ def _cited_research(state: dict[str, Any]) -> list[str]:
     return sorted(tokens)
 
 
-def run_scenario(inputs: dict[str, Any], *, suite: str) -> dict[str, Any]:
+def run_scenario(inputs: dict[str, Any], *, suite: str, provider: str = "gemini") -> dict[str, Any]:
     """Run one dataset scenario with fixture or live model dependencies."""
     scenario = scenario_by_id(inputs["scenario_id"])
     scripted = {run["run_id"]: run for run in scenario["runs"]}
@@ -172,7 +172,7 @@ def run_scenario(inputs: dict[str, Any], *, suite: str) -> dict[str, Any]:
         elif suite == "live":
             from ..providers import build_model
 
-            counting = CountingProvider(build_model())
+            counting = CountingProvider(build_model(provider))
             result = _run_thread(profile=profile, run=run, model=counting)
             result["model_backed"] = counting.call_count > 0
             result["model_call_count"] = counting.call_count
@@ -189,11 +189,11 @@ def run_scenario(inputs: dict[str, Any], *, suite: str) -> dict[str, Any]:
     }
 
 
-def make_target(suite: str) -> Callable[[dict[str, Any]], dict[str, Any]]:
+def make_target(suite: str, provider: str = "gemini") -> Callable[[dict[str, Any]], dict[str, Any]]:
     """Create the target callable handed to the experiment runner."""
 
     def target(inputs: dict[str, Any]) -> dict[str, Any]:
-        return run_scenario(inputs, suite=suite)
+        return run_scenario(inputs, suite=suite, provider=provider)
 
     target.__name__ = f"{suite}_suite"
     return target

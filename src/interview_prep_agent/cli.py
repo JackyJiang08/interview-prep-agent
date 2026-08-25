@@ -14,7 +14,7 @@ from pathlib import Path
 from .config import load_settings
 from .corpus import CorpusError, load_evidence, load_job_description
 from .models import FocusPlan, Status
-from .providers import ProviderError, build_model
+from .providers import DEFAULT_PROVIDER, PROVIDERS, ProviderError, build_model
 from .search import maybe_build_search_provider
 from .workflow import (
     EXTRACTORS,
@@ -94,6 +94,12 @@ def build_parser() -> argparse.ArgumentParser:
     prep.add_argument("--out", type=Path, default=None, help="directory for stage artifacts")
     prep.add_argument("--config", type=Path, default=None, help="settings file")
     prep.add_argument(
+        "--provider",
+        choices=PROVIDERS,
+        default=DEFAULT_PROVIDER,
+        help=f"model provider for every model stage (default: {DEFAULT_PROVIDER})",
+    )
+    prep.add_argument(
         "--research-file",
         type=Path,
         default=None,
@@ -136,6 +142,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     agent.add_argument("--out", type=Path, default=None, help="directory for artifacts")
     agent.add_argument("--config", type=Path, default=None, help="settings file")
+    agent.add_argument(
+        "--provider",
+        choices=PROVIDERS,
+        default=DEFAULT_PROVIDER,
+        help=f"model provider for every model stage (default: {DEFAULT_PROVIDER})",
+    )
     agent.add_argument(
         "--research-file",
         type=Path,
@@ -186,6 +198,12 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("offline", "live"),
         required=True,
         help="offline runs fixture providers; live calls the real provider",
+    )
+    evaluation.add_argument(
+        "--provider",
+        choices=PROVIDERS,
+        default=DEFAULT_PROVIDER,
+        help=f"model provider for the live suite (default: {DEFAULT_PROVIDER})",
     )
     evaluation.add_argument(
         "--experiment",
@@ -281,9 +299,9 @@ def run_prep_command(args: argparse.Namespace) -> int:
             if args.research_file is not None
             else ""
         )
-        # The strategy and question stages always call a provider, so the key
-        # is required up front rather than failing three stages in.
-        model = build_model()
+        # The strategy and question stages always call a provider, so the
+        # credentials are required up front rather than failing three stages in.
+        model = build_model(args.provider)
         state = run_prep(
             job_description,
             evidence_source,
@@ -343,8 +361,8 @@ def run_agent_command(args: argparse.Namespace) -> int:
         )
         settings = load_settings(args.config)
         # The workflow's preparation stages and the answer assessment always
-        # call a provider, so the key is required up front.
-        model = build_model()
+        # call a provider, so the credentials are required up front.
+        model = build_model(args.provider)
         state, _trace = run_agent(
             job_description,
             evidence_source,
@@ -393,9 +411,11 @@ def run_eval_command(args: argparse.Namespace) -> int:
 
     try:
         if args.local:
-            all_green = runner.run_local(args.suite)
+            all_green = runner.run_local(args.suite, provider=args.provider)
         else:
-            all_green = runner.run_remote(args.suite, args.experiment or args.suite)
+            all_green = runner.run_remote(
+                args.suite, args.experiment or args.suite, provider=args.provider
+            )
     except (ProviderError, RuntimeError, ValueError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1

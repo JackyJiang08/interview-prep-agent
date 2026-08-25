@@ -52,26 +52,29 @@ def print_matrix(rows: list[tuple[str, dict[str, bool]]]) -> bool:
     return all_green
 
 
-def run_local(suite: str) -> bool:
+def run_local(suite: str, provider: str = "gemini") -> bool:
     """Run one suite in-process and print the matrix."""
     rows = []
     for scenario in scenarios_for_suite(suite):
         example = dataset_example(scenario)
-        outputs = run_scenario(example["inputs"], suite=suite)
+        outputs = run_scenario(example["inputs"], suite=suite, provider=provider)
         metrics = evaluate_locally(outputs, example["outputs"], suite=suite)
         rows.append((scenario["scenario_id"], metrics))
     return print_matrix(rows)
 
 
-def _require_environment(suite: str) -> None:
+def _require_environment(suite: str, provider: str = "gemini") -> None:
     from ..config import load_settings
 
     load_settings()  # loads .env so exported credentials are visible
     missing = []
     if not os.getenv("LANGSMITH_API_KEY"):
         missing.append("LANGSMITH_API_KEY")
-    if suite == "live" and not os.getenv("GEMINI_API_KEY"):
-        missing.append("GEMINI_API_KEY")
+    if suite == "live":
+        if provider == "gemini" and not os.getenv("GEMINI_API_KEY"):
+            missing.append("GEMINI_API_KEY")
+        if provider == "azure" and not os.getenv("AZURE_OPENAI_API_KEY"):
+            missing.append("AZURE_OPENAI_API_KEY")
     if missing:
         raise RuntimeError("set " + " and ".join(missing) + " before running a remote experiment")
     os.environ.setdefault("LANGSMITH_TRACING", "true")
@@ -120,9 +123,9 @@ def _sync_dataset(client: Any, *, suite: str) -> tuple[str, dict[str, UUID]]:
     return dataset_name, example_ids
 
 
-def run_remote(suite: str, experiment: str) -> bool:
+def run_remote(suite: str, experiment: str, provider: str = "gemini") -> bool:
     """Sync the dataset, run the experiment, print the matrix and URL."""
-    _require_environment(suite)
+    _require_environment(suite, provider)
     from langsmith import Client
 
     client = Client()
@@ -135,12 +138,16 @@ def run_remote(suite: str, experiment: str) -> bool:
         )
     )
     results = client.evaluate(
-        make_target(suite),
+        make_target(suite, provider=provider),
         data=examples,
         evaluators=evaluators_for_suite(suite),
         experiment_prefix=experiment,
         max_concurrency=1,
-        metadata={"suite": suite, "runtime": "live" if suite == "live" else "fixture"},
+        metadata={
+            "suite": suite,
+            "runtime": "live" if suite == "live" else "fixture",
+            "provider": provider if suite == "live" else None,
+        },
         error_handling="log",
     )
 
