@@ -16,6 +16,7 @@ from ..agent import run_agent
 from ..config import Settings
 from ..corpus import CorpusError
 from ..providers import ProviderError, StructuredModel
+from ..search import SearchError, SearchProvider
 from ..workflow.gates import QualityGateError
 from .sessions import Session
 
@@ -31,6 +32,18 @@ class ClientGone(Exception):
 def _business_delta(entry: dict[str, Any]) -> dict[str, Any]:
     """A trace entry reduced to its client-safe business content."""
     return {key: value for key, value in entry.items() if key != "node"}
+
+
+def build_session_search(session: Session) -> SearchProvider | None:
+    """The session's search provider, or None when no key was supplied."""
+    if session.mode != "live" or not session.search_api_key:
+        return None
+    from ..search.tavily import TavilySearch
+
+    try:
+        return TavilySearch(api_key=session.search_api_key)
+    except SearchError:
+        return None
 
 
 def start_run(session: Session, settings: Settings, model: StructuredModel) -> None:
@@ -69,6 +82,8 @@ def start_run(session: Session, settings: Settings, model: StructuredModel) -> N
                 session.artifacts_dir,
                 model=model,
                 round_text=session.round_text,
+                research_text=session.research_text,
+                search=build_session_search(session),
                 thread_id=session.session_id,
                 on_event=on_event,
             )
@@ -105,6 +120,10 @@ def start_run(session: Session, settings: Settings, model: StructuredModel) -> N
                     "evidence": [
                         item.model_dump(mode="json", exclude_none=True)
                         for item in state.get("evidence") or []
+                    ],
+                    "research": [
+                        item.model_dump(mode="json", exclude_none=True)
+                        for item in state.get("research_findings") or []
                     ],
                 }
             )

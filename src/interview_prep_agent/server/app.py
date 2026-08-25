@@ -39,7 +39,9 @@ class CreateSession(BaseModel):
     evidence_text: str = ""
     evidence_format: str = Field(default="yaml", pattern="^(yaml|markdown)$")
     round_text: str = ""
+    research_text: str = ""
     gemini_api_key: str | None = None
+    tavily_api_key: str | None = None
 
 
 def _refusal(status_code: int, category: str, message: str) -> JSONResponse:
@@ -90,6 +92,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         client_ip = request.client.host if request.client else "unknown"
 
         if body.mode == "demo" and body.demo_id is not None:
+            if len(body.research_text) > settings.max_research_chars:
+                return _refusal(
+                    413,
+                    "input_too_large",
+                    f"research_text exceeds the {settings.max_research_chars}-character ceiling",
+                )
             try:
                 inputs = demo_inputs(body.demo_id)
             except KeyError:
@@ -119,6 +127,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             mode=body.mode,
             demo_id=body.demo_id if body.mode == "demo" else None,
             api_key=body.gemini_api_key if body.mode == "live" else None,
+            search_api_key=body.tavily_api_key if body.mode == "live" else None,
+            research_text=body.research_text,
             **inputs,
         )
         return JSONResponse(status_code=201, content={"session_id": session.session_id})
@@ -190,6 +200,7 @@ def _oversize(body: CreateSession, settings: Settings) -> JSONResponse | None:
         ("jd_text", body.jd_text, settings.max_jd_chars),
         ("evidence_text", body.evidence_text, settings.max_evidence_chars),
         ("round_text", body.round_text, settings.max_round_chars),
+        ("research_text", body.research_text, settings.max_research_chars),
     )
     for name, value, ceiling in checks:
         if len(value) > ceiling:

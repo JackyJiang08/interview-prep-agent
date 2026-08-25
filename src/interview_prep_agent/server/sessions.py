@@ -41,10 +41,12 @@ class Session:
     evidence_format: str
     round_text: str
     artifacts_dir: Path
+    research_text: str = ""
     demo_id: str | None = None
-    # Live-mode credential. In memory only, for the provider construction;
-    # excluded from every serialization of the session.
+    # Live-mode credentials. In memory only, for provider construction;
+    # excluded from every serialization of the session and dropped with it.
     api_key: str | None = None
+    search_api_key: str | None = None
     status: str = "created"
     stop_reason: str | None = None
     error: dict[str, str] | None = None
@@ -148,8 +150,9 @@ class SessionStore:
         session = self._sessions.pop(session_id, None)
         if session is None:
             return
-        # The key dies with the session.
+        # The keys die with the session.
         session.api_key = None
+        session.search_api_key = None
         shutil.rmtree(session.artifacts_dir, ignore_errors=True)
 
     def active_count(self) -> int:
