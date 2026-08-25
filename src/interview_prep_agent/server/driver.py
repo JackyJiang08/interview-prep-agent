@@ -96,10 +96,16 @@ def start_run(session: Session, settings: Settings, model: StructuredModel) -> N
         session.stop_reason = state.get("stop_reason")
         package = state.get("prep_package")
         if package is not None:
+            # The evidence corpus rides along so every EV-/CL- citation in the
+            # package can be opened with its provenance client-side.
             session.events.put(
                 {
                     "type": "package",
                     "package": package.model_dump(mode="json", exclude_none=True),
+                    "evidence": [
+                        item.model_dump(mode="json", exclude_none=True)
+                        for item in state.get("evidence") or []
+                    ],
                 }
             )
         session.events.put({"type": "done", "stop_reason": session.stop_reason})

@@ -61,6 +61,8 @@ def test_demo_session_end_to_end(client):
     ]
     assert seen["done"]["stop_reason"] == "valid_package_complete"
     assert len(seen["package"]) == 1
+    evidence_ids = [item["id"] for item in seen["package"][0]["evidence"]]
+    assert "CL-001" in evidence_ids  # the admitted claims ride with the package
     nodes = [item["node"] for item in seen["node_update"]]
     assert "parse_round" in nodes and "generate_final" in nodes
 

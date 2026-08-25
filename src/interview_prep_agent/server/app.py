@@ -12,11 +12,13 @@ from __future__ import annotations
 import asyncio
 import json
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from ..config import Settings, load_settings
@@ -173,6 +175,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             session.answers.put(DISCONNECTED)
             return
         await websocket.close()
+
+    # The built web app, when present. Mounted last, so /api and the socket
+    # always win; absent in development and in CI, where only the API runs.
+    web_dist = Path(__file__).resolve().parents[3] / "web" / "dist"
+    if web_dist.is_dir():
+        app.mount("/", StaticFiles(directory=web_dist, html=True), name="web")
 
     return app
 
