@@ -4,8 +4,10 @@
 #   langgraph     -> workflow/graph.py, the workflow runtime
 #   google-genai  -> providers/gemini.py, the first structured-model provider
 #   python-dotenv -> config.py, .env loading during settings resolution
+#   openai        -> providers/azure.py, the second structured-model provider
 pydantic==2.13.4
 PyYAML==6.0.2
 langgraph==1.2.10
 google-genai==2.17.0
 python-dotenv==1.2.2
+openai==3.3.1
