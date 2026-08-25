@@ -351,3 +351,32 @@ class ClarificationRecord(BaseModel):
     accepted: bool
     decision_reason: str = Field(min_length=1)
     accepted_claim: str | None = None
+
+
+class ResearchSourceKind(StrEnum):
+    """Where a research finding came from."""
+
+    SEARCH = "search"
+    PROVIDED = "provided"
+
+
+class ResearchFinding(BaseModel):
+    """One piece of role intelligence gathered for preparation.
+
+    Findings are facts about the outside world — reported interview
+    questions, role expectations, company context. They carry no claim about
+    the candidate and are therefore never matchable: a finding can inform
+    what to emphasize and how realistic a practice question sounds, and may
+    be cited by its ``SRC-`` identifier in strategy and question text, but it
+    can never become candidate evidence and never supports a match. This is
+    the round-context rule extended to a third kind of input.
+    """
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    finding_id: str = Field(pattern=r"^SRC-\d{3,}$")
+    source_kind: ResearchSourceKind
+    title: str = Field(min_length=1)
+    summary: str = Field(min_length=1)
+    url: str | None = None
+    retrieved_for: str = Field(min_length=1)

@@ -50,6 +50,13 @@ class Settings(BaseModel):
     max_questions_per_run: int | None = Field(default=None, ge=0)
     min_clarification_length: int = Field(default=24, ge=0)
 
+    # Bounds on the research stage: how many search queries one run may
+    # issue, how many findings it may keep, and how large a pasted research
+    # text the server accepts. Research informs preparation only.
+    max_search_queries: int = Field(default=3, ge=0)
+    max_research_findings: int = Field(default=12, ge=0)
+    max_research_chars: int = Field(default=20_000, ge=1)
+
     # Bounds on the web session layer, the same discipline the agent has:
     # exceeding any of them is a structured refusal, never a crash. CORS
     # defaults to no cross-origin access at all.
