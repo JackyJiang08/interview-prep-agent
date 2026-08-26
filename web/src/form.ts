@@ -29,6 +29,7 @@ export interface FormState {
   apiKey: string;
   provider: Provider;
   stages: Stages;
+  maxQuestions: string; // "" takes the server's default
   company: string;
   roleTitle: string;
   roundText: string;
@@ -46,6 +47,7 @@ export const initialForm: FormState = {
   apiKey: "",
   provider: "gemini",
   stages: "llm",
+  maxQuestions: "",
   company: "",
   roleTitle: "",
   roundText: "",

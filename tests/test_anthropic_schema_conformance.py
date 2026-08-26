@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 
 from interview_prep_agent.models import (
     ClarificationAssessment,
+    CraftedQuestion,
     InterviewRound,
     InterviewStrategy,
     MatchAssessmentList,
@@ -35,6 +36,7 @@ REQUESTED_MODELS = [
     RequirementExtraction,
     MatchAssessmentList,
     ClarificationAssessment,
+    CraftedQuestion,
     InterviewRound,
     InterviewStrategy,
     MockQuestionList,

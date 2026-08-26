@@ -53,6 +53,8 @@ class Session:
     # path; a demo keeps the lexical one its fixtures were recorded with.
     extractor: str = "lexical"
     matcher: str = "lexical"
+    # A live session's question ceiling; None takes the settings default.
+    max_questions: int | None = None
     api_key: str | None = None
     search_api_key: str | None = None
     azure_endpoint: str | None = None

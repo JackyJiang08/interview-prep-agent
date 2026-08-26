@@ -53,6 +53,10 @@ class Settings(BaseModel):
     max_agent_actions: int | None = Field(default=None, ge=1)
     agent_action_cap: int = Field(default=32, ge=1)
     max_questions_per_run: int | None = Field(default=None, ge=0)
+    # The ceiling a live web session gets when it sets none of its own:
+    # nobody answers thirty questions, and the queue order already puts the
+    # most important gaps first. Demo sessions keep the unbounded default.
+    live_question_ceiling: int | None = Field(default=6, ge=0)
     min_clarification_length: int = Field(default=24, ge=0)
 
     # Bounds on the research stage: how many search queries one run may

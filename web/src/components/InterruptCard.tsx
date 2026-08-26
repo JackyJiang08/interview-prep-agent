@@ -15,10 +15,14 @@ export function InterruptCard({
   pending,
   assessing,
   onAnswer,
+  onSkip,
+  onSkipRemaining,
 }: {
   pending: PendingInterrupt;
   assessing: boolean;
   onAnswer: (text: string) => void;
+  onSkip: () => void;
+  onSkipRemaining: () => void;
 }) {
   const [text, setText] = useState("");
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -27,7 +31,7 @@ export function InterruptCard({
     headingRef.current?.focus();
   }, [pending.requirementId]);
 
-  const requirement = requirementText(pending.question);
+  const requirement = pending.requirementText ?? requirementText(pending.question);
   return (
     <section className="interrupt-card" aria-label="Evidence question">
       <h3 tabIndex={-1} ref={headingRef}>
@@ -40,7 +44,9 @@ export function InterruptCard({
       <p>{pending.question}</p>
       {assessing ? (
         <p className="empty-note" role="status">
-          Checking the answer against the admission gates.
+          {pending.answer === ""
+            ? "Recording the skip. The requirement stays an open gap."
+            : "Checking the answer against the admission gates."}
         </p>
       ) : (
         <form
@@ -58,9 +64,21 @@ export function InterruptCard({
               required
             />
           </label>
-          <button className="primary" type="submit" disabled={text.trim() === ""}>
-            Submit answer
-          </button>
+          <div className="answer-actions">
+            <button className="primary" type="submit" disabled={text.trim() === ""}>
+              Submit answer
+            </button>
+            <button type="button" className="plain" onClick={onSkip}>
+              Skip this question
+            </button>
+            <button type="button" className="plain quiet" onClick={onSkipRemaining}>
+              Skip remaining questions
+            </button>
+          </div>
+          <p className="key-notice">
+            A skipped requirement stays an open gap in the package. Skipping the
+            rest goes straight to the final package.
+          </p>
         </form>
       )}
     </section>

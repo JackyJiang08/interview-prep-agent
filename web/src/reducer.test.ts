@@ -158,6 +158,30 @@ describe("terminal states", () => {
   });
 });
 
+describe("skipping", () => {
+  it("a skip waits for the server's record like an answer does, then resolves as not admitted", () => {
+    let state = play([INTERRUPT]);
+    state = runReducer(state, { kind: "skipped" });
+    expect(state.phase).toBe("assessing");
+    expect(state.pending?.answer).toBe("");
+    state = runReducer(state, REJECTED_RECORD);
+    expect(state.phase).toBe("running");
+    expect(state.resolutions[0].accepted).toBe(false);
+  });
+
+  it("carries the requirement's own wording when the server sends it", () => {
+    const withText = play([
+      msg({ type: "interrupt", requirement_id: "REQ-002", question: "Q", requirement_text: "SQL" }),
+    ]);
+    expect(withText.pending?.requirementText).toBe("SQL");
+    expect(play([INTERRUPT]).pending?.requirementText).toBeNull();
+  });
+
+  it("a skip without a pending question is a no-op", () => {
+    expect(runReducer(initialRunState, { kind: "skipped" })).toEqual(initialRunState);
+  });
+});
+
 describe("unknown input", () => {
   it("unknown message types change nothing and never throw", () => {
     const before = play([INTERRUPT]);

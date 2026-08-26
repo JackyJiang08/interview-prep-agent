@@ -13,6 +13,7 @@ export interface CreateSessionBody {
   provider?: "gemini" | "azure" | "anthropic";
   extractor?: "lexical" | "llm";
   matcher?: "lexical" | "llm";
+  max_questions?: number;
   gemini_api_key?: string;
   anthropic_api_key?: string;
   azure_api_key?: string;

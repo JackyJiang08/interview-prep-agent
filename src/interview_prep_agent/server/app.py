@@ -24,6 +24,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from ..agent import SKIP_ANSWER, SKIP_REMAINING_ANSWER
 from ..config import Settings, load_settings
 from ..corpus import CorpusError, parse_evidence_corpus, parse_evidence_markdown
 from ..providers import PROVIDERS, ProviderError
@@ -79,6 +80,8 @@ class CreateSession(BaseModel):
     # keeps the lexical path its fixtures were recorded with.
     extractor: str | None = Field(default=None, pattern="^(lexical|llm)$")
     matcher: str | None = Field(default=None, pattern="^(lexical|llm)$")
+    # A live session's question ceiling; omitted takes the settings default.
+    max_questions: int | None = Field(default=None, ge=0)
     gemini_api_key: str | None = None
     anthropic_api_key: str | None = None
     tavily_api_key: str | None = None
@@ -221,6 +224,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             provider=body.provider,
             extractor=body.extractor or stage_default,
             matcher=body.matcher or stage_default,
+            max_questions=body.max_questions,
             api_key=_provider_key(body) if body.mode == "live" else None,
             search_api_key=body.tavily_api_key if body.mode == "live" else None,
             azure_endpoint=body.azure_endpoint if body.mode == "live" else None,
@@ -474,15 +478,20 @@ def _build_session_model(session):
 
 
 async def _receive_answer(websocket: WebSocket, settings: Settings) -> str | None:
-    """Read one answer message; refuse oversized or malformed ones in place."""
+    """Read one answer, skip, or skip-remaining message; refuse others in place."""
     while True:
         message = await websocket.receive_json()
+        if message.get("type") == "skip":
+            return SKIP_ANSWER
+        if message.get("type") == "skip_remaining":
+            return SKIP_REMAINING_ANSWER
         if message.get("type") != "answer" or "text" not in message:
             await websocket.send_json(
                 {
                     "type": "error",
                     "category": "bad_message",
-                    "message": 'expected {"type": "answer", "text": ...}',
+                    "message": 'expected {"type": "answer", "text": ...}, {"type": "skip"} '
+                    'or {"type": "skip_remaining"}',
                 }
             )
             continue

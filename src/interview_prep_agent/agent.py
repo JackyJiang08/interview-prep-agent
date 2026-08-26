@@ -41,6 +41,7 @@ from .models import (
     ClarificationAssessment,
     ClarificationRecord,
     CoverageLevel,
+    CraftedQuestion,
     EvidenceItem,
     FocusArea,
     InterviewRound,
@@ -61,6 +62,31 @@ STOP_INVALID_FINAL = "invalid_final_package"
 STOP_BUDGET_EXHAUSTED = "action_budget_exhausted"
 
 CEILING_NOTE = "question ceiling reached with gaps remaining"
+
+# What a skipped question resumes with. A skip is recorded as unanswered and
+# the requirement stays an honest gap; closing the queue routes straight to
+# the final generation. Neither consults a model.
+SKIP_ANSWER = "__skip__"
+SKIP_REMAINING_ANSWER = "__skip_remaining__"
+SKIP_REASON = "skipped by the candidate; no answer was given"
+SKIP_REMAINING_REASON = "skipped by the candidate; the remaining questions were closed"
+
+QUESTION_CRAFT_INSTRUCTIONS = """\
+You write one interview question for a candidate preparing for a role.
+
+Rules:
+
+- Ask for one specific example from the candidate's experience that
+  demonstrates the requirement below: what they did, the method or tools,
+  and the result.
+- Stay on this one requirement. Do not ask about anything else in the
+  posting, and do not assume any experience the candidate has not stated.
+- Use the posting excerpt only to phrase the question the way this role
+  would; never quote it as a fact about the candidate.
+- At most sixty words, no preamble, no numbering.
+
+Return nothing except data conforming to the supplied schema.
+"""
 
 # Business fields copied back from a workflow run. Nothing else crosses:
 # the workflow's own control fields stay its own.
@@ -151,6 +177,9 @@ class AgentState(TypedDict, total=False):
     current_question: str | None
     pending_answer: str | None
     question_budget_left: bool
+    # Set when the candidate closes the queue; every later observation
+    # routes to the final generation.
+    questions_closed: bool
     initial_gap_count: int
     action_count: int
     initial_package_generated: bool
@@ -251,6 +280,38 @@ def build_question(gap: Requirement) -> str:
     )
 
 
+def build_question_crafting_prompt(gap: Requirement, job_description: str) -> str:
+    """Place the requirement and a posting excerpt after the instructions."""
+    excerpt = (gap.source_quote or "").strip() or job_description.strip()[:1500]
+    target = {"requirement_id": gap.id, "requirement": gap.text}
+    return (
+        f"{QUESTION_CRAFT_INSTRUCTIONS}\n"
+        "----- REQUIREMENT -----\n"
+        f"{json.dumps(target, indent=2, ensure_ascii=False)}\n"
+        "----- POSTING EXCERPT -----\n"
+        f"{excerpt}\n"
+    )
+
+
+def craft_question(gap: Requirement, job_description: str, model: StructuredModel) -> str:
+    """One model-worded question for a gap, or the template on any failure.
+
+    The wording is the only thing the model decides here. The target, the
+    admission gates and the assessment are unchanged, and a failed call, an
+    unusable response or an empty question each fall back to the same
+    deterministic template a fixture session uses.
+    """
+    try:
+        payload = model.generate_json(
+            build_question_crafting_prompt(gap, job_description),
+            CraftedQuestion.model_json_schema(),
+        )
+        crafted = CraftedQuestion.model_validate(payload, from_attributes=True)
+    except Exception:  # noqa: BLE001 - every failure means the template
+        return build_question(gap)
+    return crafted.question.strip() or build_question(gap)
+
+
 def build_round_parsing_prompt(round_text: str, company: str = "", role_title: str = "") -> str:
     """Place the freeform round text after the parsing instructions.
 
@@ -322,6 +383,7 @@ def build_agent_graph(
     min_questions: int = 8,
     min_requirement_chars: int = 12,
     on_stage: Callable[[str], None] | None = None,
+    craft_questions: bool = False,
 ):
     """Compile the evidence-gated loop.
 
@@ -444,7 +506,9 @@ def build_agent_graph(
             state.get("processed_requirement_ids", []),
         )
         asked = len(state.get("processed_requirement_ids", []))
-        budget_left = max_questions_per_run is None or asked < max_questions_per_run
+        budget_left = not state.get("questions_closed", False) and (
+            max_questions_per_run is None or asked < max_questions_per_run
+        )
         update: dict[str, Any] = {
             "current_gap": current,
             "question_budget_left": budget_left,
@@ -468,11 +532,16 @@ def build_agent_graph(
         gap = state.get("current_gap")
         if gap is None:
             raise ValueError("the ask capability requires a current gap")
-        question = build_question(gap)
+        question = (
+            craft_question(gap, state["job_description"], resolve_model())
+            if craft_questions
+            else build_question(gap)
+        )
         answer = interrupt(
             {
                 "type": "evidence_request",
                 "requirement_id": gap.id,
+                "requirement_text": gap.text,
                 "question": question,
             }
         )
@@ -489,6 +558,34 @@ def build_agent_graph(
         answer = state.get("pending_answer")
         if gap is None or question is None or answer is None:
             raise ValueError("assessment requires a gap, a question and an answer")
+
+        if answer in (SKIP_ANSWER, SKIP_REMAINING_ANSWER):
+            # Recorded as unanswered, in code; the gap stays honest.
+            closing = answer == SKIP_REMAINING_ANSWER
+            skipped = ClarificationRecord(
+                requirement_id=gap.id,
+                question=question,
+                answer="",
+                assessment=ClarificationAssessment(
+                    target_requirement_id=gap.id,
+                    is_valid=False,
+                    relevance_reason="No answer was given.",
+                    specificity_reason="No answer was given.",
+                    accepted_claim=None,
+                ),
+                accepted=False,
+                decision_reason=SKIP_REMAINING_REASON if closing else SKIP_REASON,
+                accepted_claim=None,
+            )
+            update: dict[str, Any] = {
+                "processed_requirement_ids": [gap.id],
+                "clarification_records": [skipped],
+                "pending_answer": None,
+                "current_question": None,
+            }
+            if closing:
+                update["questions_closed"] = True
+            return update
 
         payload = resolve_model().generate_json(
             build_assessment_prompt(gap, question, answer),
@@ -598,6 +695,7 @@ def run_agent(
     thread_id: str = "agent",
     on_event: Callable[[dict[str, Any]], None] | None = None,
     on_stage: Callable[[str], None] | None = None,
+    craft_questions: bool = False,
 ) -> tuple[AgentState, list[dict[str, Any]]]:
     """Run the loop to termination, answering interrupts via the callback.
 
@@ -625,6 +723,9 @@ def run_agent(
             identical with or without it.
         on_stage: Optional observer called with each preparation stage's
             name as it starts, inside either generation. Progress only.
+        craft_questions: Word each question through the model, falling back
+            to the template on any failure. Off for fixture runs, which must
+            stay deterministic.
 
     Returns:
         The final state and the ordered trace.
@@ -653,6 +754,7 @@ def run_agent(
         max_requirements=settings.max_requirements,
         min_requirement_chars=settings.min_requirement_chars,
         on_stage=on_stage,
+        craft_questions=craft_questions,
     )
     config = {"configurable": {"thread_id": thread_id}}
 

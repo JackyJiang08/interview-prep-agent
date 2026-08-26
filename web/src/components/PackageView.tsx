@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { useRef, useState } from "react";
 
+import { downloadText, packageMarkdown, questionsMarkdown } from "../export";
+import type { Resolution } from "../reducer";
 import type {
   EvidenceItem,
   PrepPackage,
@@ -14,11 +16,20 @@ export function PackageView({
   prepPackage,
   evidence,
   research = [],
+  resolutions = [],
 }: {
   prepPackage: PrepPackage;
   evidence: EvidenceItem[];
   research?: ResearchFinding[];
+  resolutions?: Resolution[];
 }) {
+  const exportPackage = () =>
+    downloadText(
+      "interview-prep-package.md",
+      packageMarkdown({ prepPackage, evidence, research, resolutions }),
+    );
+  const exportQuestions = () =>
+    downloadText("practice-questions.md", questionsMarkdown(prepPackage));
   const [openItem, setOpenItem] = useState<EvidenceItem | null>(null);
   const [openFinding, setOpenFinding] = useState<ResearchFinding | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -87,6 +98,17 @@ export function PackageView({
 
   return (
     <div aria-label="Preparation package">
+      <div className="export-actions no-print">
+        <button type="button" className="primary" onClick={exportPackage}>
+          Download package (Markdown)
+        </button>
+        <button type="button" className="plain" onClick={exportQuestions}>
+          Download practice questions (Markdown)
+        </button>
+        <button type="button" className="plain" onClick={() => window.print()}>
+          Print or save as PDF
+        </button>
+      </div>
       <section className="package-section" aria-label="Coverage">
         <h2>Requirements and coverage</h2>
         <table>

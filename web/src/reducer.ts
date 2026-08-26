@@ -57,6 +57,7 @@ export function describeProgress(stage: string): { label: string; note: string |
 
 export interface PendingInterrupt {
   requirementId: string;
+  requirementText: string | null;
   question: string;
   answer: string | null;
 }
@@ -102,6 +103,7 @@ export const initialRunState: RunState = {
 export type RunAction =
   | { kind: "message"; message: unknown; at?: number }
   | { kind: "answer_submitted"; text: string }
+  | { kind: "skipped" }
   | { kind: "socket_closed" };
 
 const TERMINAL: Phase[] = ["completed", "failed"];
@@ -115,6 +117,10 @@ export function runReducer(state: RunState, action: RunAction): RunState {
         phase: "assessing",
         pending: { ...state.pending, answer: action.text },
       };
+    case "skipped":
+      // Recorded server-side as unanswered; the card waits for that record.
+      if (state.pending === null) return state;
+      return { ...state, phase: "assessing", pending: { ...state.pending, answer: "" } };
     case "socket_closed":
       if (TERMINAL.includes(state.phase)) return state;
       return { ...state, phase: "disconnected" };
@@ -165,6 +171,10 @@ function applyMessage(state: RunState, raw: unknown, at: number | null): RunStat
         progress: null,
         pending: {
           requirementId: message.requirement_id,
+          requirementText:
+            typeof message.requirement_text === "string" && message.requirement_text !== ""
+              ? message.requirement_text
+              : null,
           question: message.question,
           answer: null,
         },

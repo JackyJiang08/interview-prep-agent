@@ -51,7 +51,13 @@ def build_session_search(session: Session) -> SearchProvider | None:
 def start_run(session: Session, settings: Settings, model: StructuredModel) -> None:
     """Run the session's agent thread; every outcome lands on the event queue."""
 
+    # The interrupt payload arrives on the trace before the ask callback
+    # fires, so the requirement's own wording can ride with the question.
+    latest_interrupt: dict[str, Any] = {}
+
     def on_event(entry: dict[str, Any]) -> None:
+        if entry["node"] == "ask" and entry.get("interrupt"):
+            latest_interrupt.update(entry["interrupt"][0])
         session.events.put(
             {"type": "node_update", "node": entry["node"], "delta": _business_delta(entry)}
         )
@@ -75,6 +81,7 @@ def start_run(session: Session, settings: Settings, model: StructuredModel) -> N
             {
                 "type": "interrupt",
                 "requirement_id": requirement_id,
+                "requirement_text": latest_interrupt.get("requirement_text", ""),
                 "question": question,
                 "context": {"mode": session.mode, "demo_id": session.demo_id},
             }
@@ -87,13 +94,24 @@ def start_run(session: Session, settings: Settings, model: StructuredModel) -> N
 
     def work() -> None:
         session.status = "running"
+        # A live session gets a question ceiling and model-worded questions;
+        # a demo keeps the unbounded, templated run its fixtures recorded.
+        live = session.mode == "live"
+        run_settings = settings
+        if live:
+            ceiling = (
+                session.max_questions
+                if session.max_questions is not None
+                else settings.live_question_ceiling
+            )
+            run_settings = settings.model_copy(update={"max_questions_per_run": ceiling})
         try:
             state, _trace = run_agent(
                 session.job_description,
                 session.evidence_source,
                 "markdown" if session.evidence_format == "markdown" else "corpus",
                 ask,
-                settings,
+                run_settings,
                 session.artifacts_dir,
                 model=model,
                 # The root cause of a live run that read section headings as
@@ -109,6 +127,7 @@ def start_run(session: Session, settings: Settings, model: StructuredModel) -> N
                 thread_id=session.session_id,
                 on_event=on_event,
                 on_stage=on_stage,
+                craft_questions=live,
             )
         except ClientGone:
             session.status = "failed"

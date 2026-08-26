@@ -97,6 +97,10 @@ function RunScreen({
     socketRef.current?.send(JSON.stringify({ type: "answer", text }));
     dispatch({ kind: "answer_submitted", text });
   };
+  const skip = (remaining: boolean) => {
+    socketRef.current?.send(JSON.stringify({ type: remaining ? "skip_remaining" : "skip" }));
+    dispatch({ kind: "skipped" });
+  };
 
   return (
     <div className="run-layout">
@@ -110,6 +114,8 @@ function RunScreen({
             pending={state.pending}
             assessing={state.phase === "assessing"}
             onAnswer={answer}
+            onSkip={() => skip(false)}
+            onSkipRemaining={() => skip(true)}
           />
         )}
         {state.phase === "connecting" && state.stages.length === 0 && (
@@ -164,6 +170,7 @@ function RunScreen({
             prepPackage={state.prepPackage}
             evidence={state.evidence}
             research={state.research}
+            resolutions={state.resolutions}
           />
         )}
       </section>

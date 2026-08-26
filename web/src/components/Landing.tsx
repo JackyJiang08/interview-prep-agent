@@ -84,6 +84,7 @@ export function Landing({
     apiKey,
     provider,
     stages,
+    maxQuestions,
     company,
     roleTitle,
     roundText,
@@ -100,6 +101,7 @@ export function Landing({
   const setApiKey = (value: string) => set({ apiKey: value });
   const setProvider = (value: Provider) => set({ provider: value });
   const setStages = (value: Stages) => set({ stages: value });
+  const setMaxQuestions = (value: string) => set({ maxQuestions: value });
   const setCompany = (value: string) => set({ company: value });
   const setRoleTitle = (value: string) => set({ roleTitle: value });
   const setRoundText = (value: string) => set({ roundText: value });
@@ -244,6 +246,7 @@ export function Landing({
       provider,
       extractor: stages,
       matcher: stages,
+      max_questions: parseCeiling(maxQuestions),
       ...(provider === "gemini"
         ? { gemini_api_key: apiKey }
         : provider === "azure"
@@ -450,6 +453,19 @@ export function Landing({
                 </label>
               </>
             )}
+            <label>
+              Question ceiling. How many gaps the run may ask about, most
+              important first. Leave empty for the default of six.
+              <input
+                type="number"
+                min={0}
+                max={50}
+                inputMode="numeric"
+                value={maxQuestions}
+                placeholder="6"
+                onChange={(event) => setMaxQuestions(event.target.value)}
+              />
+            </label>
             <BoundedTextInput
               label="Upcoming round, optional. Shapes the strategy and the practice questions. Never changes which requirements count as covered."
               field="round_text"
@@ -696,6 +712,14 @@ function EvidenceCheckLine({ check }: { check: EvidenceCheck }) {
         </p>
       );
   }
+}
+
+// A ceiling typed into the field, or undefined so the server's default applies.
+export function parseCeiling(value: string): number | undefined {
+  const trimmed = value.trim();
+  if (trimmed === "") return undefined;
+  const number = Number(trimmed);
+  return Number.isInteger(number) && number >= 0 ? number : undefined;
 }
 
 function BoundedTextInput({

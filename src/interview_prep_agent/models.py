@@ -339,6 +339,20 @@ class ClarificationAssessment(BaseModel):
     accepted_claim: str | None = None
 
 
+class CraftedQuestion(BaseModel):
+    """One interview-style question a live session asks for a gap.
+
+    The response-schema shape for question crafting. The text is only ever
+    the wording shown to the candidate: the requirement it targets, the
+    admission gates and the assessment are unchanged by it, and any failure
+    to produce one falls back to the deterministic template.
+    """
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    question: str = Field(min_length=1, max_length=600)
+
+
 class ClarificationRecord(BaseModel):
     """The auditable outcome for one processed gap, admitted or not."""
 
