@@ -234,6 +234,36 @@ options require a way to pick between them. That is the right division. The
 cost of the second provider was one file, one registry entry, one flag on
 three commands, and a handful of fields on one request model.
 
+### The third data point
+
+Adding Anthropic asked the question again, and the answer is less flattering
+than the first time. The one file held: ``providers/anthropic.py`` implements
+the two-method contract and three lines register it. Selection cost even
+less than before — the commands take their choices from the registry, so
+they needed nothing; the eval runner's environment check, the server's key
+selection and refusal path, and the page's provider choice each gained one
+value, which is the second entry's first leak recurring at its stated price.
+
+What did not hold was "nothing else". The second entry filed the schema
+adaptation — closing every object and requiring every property, because a
+strict structured-output mode demands it — as provider-shaped work, confined
+to the provider file, which is where the seam intends such work to live.
+The third provider's structured-output mode wanted the identical walk.
+Copying forty lines into a second file would have kept the promise in
+letter and broken it in spirit, so the walk moved to ``providers/schema.py``
+and ``azure.py`` now imports it. Adding the third provider therefore
+touched the second, which is precisely the thing the promise says never
+happens. The honest reading is that the adaptation was never
+provider-shaped: it is shaped by strict structured output, a category two
+of three providers share, and the file layout now says so instead of the
+docstring claiming otherwise.
+
+One smaller difference is worth recording without calling it a leak: the
+third provider builds its client on first use rather than in the
+constructor, so holding a key costs nothing until a request is made. The
+other two could adopt that, and nothing above the seam would notice either
+way.
+
 ## Tracing lives inside the seam, off by default
 
 Optional observability is wired at exactly one place: the provider
