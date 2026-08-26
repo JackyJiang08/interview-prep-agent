@@ -1,6 +1,24 @@
-import { useEffect, useReducer, useState } from "react";
+import {
+  useEffect,
+  useReducer,
+  useRef,
+  useState,
+  type DragEvent,
+  type ReactNode,
+} from "react";
 
 import { createSession, fetchDemos, type CreateSessionBody } from "../api";
+import { displayTitle, SAMPLE_DEMO_ID, SAMPLE_DISPLAY_NAME } from "../demos";
+import { disclosureReducer, initialDisclosure, type Section } from "../disclosure";
+import {
+  detectEvidenceFormat,
+  EVIDENCE_EXTENSIONS,
+  overCeiling,
+  POSTING_EXTENSIONS,
+  readTextFile,
+  type BoundedField,
+  type EvidenceFormat,
+} from "../inputs";
 import type { Demo } from "../types";
 import {
   FETCH_TIMEOUT_MS,
@@ -9,13 +27,29 @@ import {
   wakeReducer,
 } from "../wake";
 
+type Provider = "gemini" | "azure";
+
+// A refusal is shown next to the action that produced it, never elsewhere.
+interface Notice {
+  where: "sample" | "own" | "demos";
+  message: string;
+}
+
 export function Landing({ onStart }: { onStart: (sessionId: string) => void }) {
   const [demos, setDemos] = useState<Demo[] | null>(null);
   const [wake, dispatchWake] = useReducer(wakeReducer, initialWakeState);
-  const [ownKey, setOwnKey] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [open, dispatchOpen] = useReducer(disclosureReducer, initialDisclosure);
+  const [error, setError] = useState<Notice | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Advanced options ride along with every run, including the demos, so a
+  // visitor who wrote research notes sees them used.
+  const [provider, setProvider] = useState<Provider>("gemini");
+  const [roundText, setRoundText] = useState("");
   const [researchText, setResearchText] = useState("");
+  const [searchKey, setSearchKey] = useState("");
+  const [azureEndpoint, setAzureEndpoint] = useState("");
+  const [azureDeployment, setAzureDeployment] = useState("");
 
   useEffect(() => {
     if (wake.phase === "ready") return;
@@ -37,26 +71,47 @@ export function Landing({ onStart }: { onStart: (sessionId: string) => void }) {
     };
   }, [wake]);
 
-  const start = async (body: CreateSessionBody) => {
+  const start = async (where: Notice["where"], body: CreateSessionBody) => {
     setBusy(true);
     setError(null);
     try {
       onStart(await createSession(body));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "session creation failed");
+      const message =
+        cause instanceof Error ? cause.message : "the session could not be started";
+      setError({ where, message });
       setBusy(false);
     }
   };
 
+  const runDemo = (where: Notice["where"], demoId: string) =>
+    start(where, { mode: "demo", demo_id: demoId, research_text: researchText });
+
+  const noticeAt = (where: Notice["where"]) =>
+    error !== null && error.where === where ? (
+      <p className="error-line" role="alert">
+        {error.message}
+      </p>
+    ) : null;
+
+  const ready = wake.phase === "ready";
+  const toggle = (section: Section) => dispatchOpen({ kind: "toggle", section });
+
   return (
-    <div>
-      <section aria-label="Demos">
-        <h2>Run a committed demo</h2>
+    <div className="landing">
+      <section className="hero" aria-label="Sample run">
+        <p className="hero-name">{SAMPLE_DISPLAY_NAME}</p>
+        <button
+          className="primary hero-action"
+          type="button"
+          disabled={busy || !ready}
+          onClick={() => runDemo("sample", SAMPLE_DEMO_ID)}
+        >
+          Run the sample
+        </button>
         <p className="empty-note">
-          Each demo replays one of the regression scenarios: the fixture
-          provider stands in for the model, so no key is needed and every
-          verdict is deterministic. You answer the questions; the admission
-          gates decide.
+          No key needed. You answer three questions about your experience; the
+          gates decide what counts.
         </p>
         {wake.phase === "waking" && (
           <p className="empty-note" role="status">
@@ -64,138 +119,247 @@ export function Landing({ onStart }: { onStart: (sessionId: string) => void }) {
             seconds to wake.
           </p>
         )}
-        {error !== null && <p className="error-line">{error}</p>}
-        <div className="landing-grid">
-          {(demos ?? []).map((demo) => (
-            <button
-              key={demo.demo_id}
-              type="button"
-              className="demo-card"
-              disabled={busy}
-              onClick={() =>
-                start({
-                  mode: "demo",
-                  demo_id: demo.demo_id,
-                  research_text: researchText,
-                })
-              }
-            >
-              <span className="demo-id">{demo.demo_id}</span>
-              <p>{demo.description}</p>
-            </button>
-          ))}
-        </div>
-        <label>
-          Role research, optional - notes or excerpts you have gathered. They
-          sharpen strategy and questions; they never become evidence and never
-          affect matching.
-          <textarea
-            rows={3}
-            value={researchText}
-            onChange={(event) => setResearchText(event.target.value)}
-          />
-        </label>
+        {noticeAt("sample")}
       </section>
 
-      <section className="own-key" aria-label="Run with your own key">
-        {ownKey ? (
-          <OwnKeyForm busy={busy} researchText={researchText} onSubmit={start} />
-        ) : (
-          <p className="empty-note">
-            Or{" "}
-            <button type="button" className="plain" onClick={() => setOwnKey(true)}>
-              bring your own key
-            </button>{" "}
-            to run a live session over your own posting and evidence.
-          </p>
+      <section className="own-posting" aria-label="Use your own posting">
+        <h2>Use your own posting</h2>
+        <OwnPostingForm
+          busy={busy || !ready}
+          provider={provider}
+          advanced={{
+            round_text: roundText,
+            research_text: researchText,
+            tavily_api_key: searchKey || undefined,
+            azure_endpoint: azureEndpoint || undefined,
+            azure_deployment: azureDeployment || undefined,
+          }}
+          onRefusal={(message) =>
+            setError(message === null ? null : { where: "own", message })
+          }
+          onSubmit={(body) => start("own", body)}
+        />
+        {noticeAt("own")}
+        <button
+          type="button"
+          className="disclosure"
+          aria-expanded={open.advanced}
+          onClick={() => toggle("advanced")}
+        >
+          Advanced options
+        </button>
+        {open.advanced && (
+          <div className="advanced">
+            <fieldset className="choice-row">
+              <legend className="empty-note">
+                Model provider - the key above belongs to whichever you pick
+              </legend>
+              <label>
+                <input
+                  type="radio"
+                  name="provider"
+                  checked={provider === "gemini"}
+                  onChange={() => setProvider("gemini")}
+                />
+                Gemini
+              </label>
+              <label>
+                <input
+                  type="radio"
+                  name="provider"
+                  checked={provider === "azure"}
+                  onChange={() => setProvider("azure")}
+                />
+                Azure OpenAI
+              </label>
+            </fieldset>
+            {provider === "azure" && (
+              <>
+                <label>
+                  Azure OpenAI endpoint - the resource URL from your Azure portal
+                  <input
+                    type="text"
+                    value={azureEndpoint}
+                    onChange={(event) => setAzureEndpoint(event.target.value)}
+                  />
+                </label>
+                <label>
+                  Azure OpenAI deployment - the name you gave the model deployment
+                  <input
+                    type="text"
+                    value={azureDeployment}
+                    onChange={(event) => setAzureDeployment(event.target.value)}
+                  />
+                </label>
+              </>
+            )}
+            <BoundedTextInput
+              label="Upcoming round, optional - shapes the strategy and the practice questions, never which requirements count as covered"
+              field="round_text"
+              rows={1}
+              value={roundText}
+              onChange={setRoundText}
+            />
+            <BoundedTextInput
+              label="Role research, optional - notes or excerpts you have gathered about the team or the role. They sharpen the strategy and the questions; they never count as evidence"
+              field="research_text"
+              rows={3}
+              value={researchText}
+              onChange={setResearchText}
+            />
+            <label>
+              Search API key, optional - lets the run look up the role itself
+              instead of relying on your notes alone
+              <input
+                type="password"
+                value={searchKey}
+                onChange={(event) => setSearchKey(event.target.value)}
+                autoComplete="off"
+              />
+            </label>
+          </div>
+        )}
+      </section>
+
+      <section className="engineering" aria-label="Engineering demos">
+        <button
+          type="button"
+          className="disclosure"
+          aria-expanded={open.demos}
+          onClick={() => toggle("demos")}
+        >
+          Engineering demos
+        </button>
+        {open.demos && (
+          <div className="demo-list">
+            <p className="empty-note">
+              Each demo replays one of the regression scenarios: the fixture
+              provider stands in for the model, so no key is needed and every
+              verdict is deterministic. You answer the questions; the admission
+              gates decide.
+            </p>
+            {(demos ?? []).map((demo) => (
+              <div className="demo-row" key={demo.demo_id}>
+                <div className="demo-text">
+                  <span className="demo-title">{displayTitle(demo.demo_id)}</span>
+                  <span className="demo-id mono">{demo.demo_id}</span>
+                  <p>{demo.description}</p>
+                </div>
+                <button
+                  type="button"
+                  className="primary"
+                  disabled={busy || !ready}
+                  onClick={() => runDemo("demos", demo.demo_id)}
+                >
+                  Run
+                </button>
+              </div>
+            ))}
+            {noticeAt("demos")}
+          </div>
         )}
       </section>
     </div>
   );
 }
 
-function OwnKeyForm({
+function OwnPostingForm({
   busy,
-  researchText,
+  provider,
+  advanced,
+  onRefusal,
   onSubmit,
 }: {
   busy: boolean;
-  researchText: string;
+  provider: Provider;
+  advanced: Pick<
+    CreateSessionBody,
+    "round_text" | "research_text" | "tavily_api_key" | "azure_endpoint" | "azure_deployment"
+  >;
+  onRefusal: (message: string | null) => void;
   onSubmit: (body: CreateSessionBody) => void;
 }) {
   const [jdText, setJdText] = useState("");
   const [evidenceText, setEvidenceText] = useState("");
-  const [format, setFormat] = useState<"yaml" | "markdown">("yaml");
-  const [roundText, setRoundText] = useState("");
+  const [override, setOverride] = useState<EvidenceFormat | null>(null);
   const [apiKey, setApiKey] = useState("");
-  const [searchKey, setSearchKey] = useState("");
+
+  const detected = detectEvidenceFormat(evidenceText);
+  const format = override ?? detected;
+
+  const submit = () => {
+    const refusal =
+      overCeiling("jd_text", jdText.length) ??
+      overCeiling("evidence_text", evidenceText.length) ??
+      overCeiling("round_text", (advanced.round_text ?? "").length) ??
+      overCeiling("research_text", (advanced.research_text ?? "").length);
+    if (refusal !== null) {
+      onRefusal(refusal);
+      return;
+    }
+    onRefusal(null);
+    onSubmit({
+      mode: "live",
+      jd_text: jdText,
+      evidence_text: evidenceText,
+      evidence_format: format,
+      provider,
+      ...(provider === "gemini" ? { gemini_api_key: apiKey } : { azure_api_key: apiKey }),
+      ...advanced,
+    });
+  };
 
   return (
     <form
       onSubmit={(event) => {
         event.preventDefault();
-        onSubmit({
-          mode: "live",
-          jd_text: jdText,
-          evidence_text: evidenceText,
-          evidence_format: format,
-          round_text: roundText,
-          research_text: researchText,
-          gemini_api_key: apiKey,
-          tavily_api_key: searchKey || undefined,
-        });
+        submit();
       }}
     >
-      <h2>Bring your own key</h2>
+      <DropTextarea
+        label="Job posting"
+        hint={`Paste the posting, or drop a ${POSTING_EXTENSIONS.join(" or ")} file here`}
+        field="jd_text"
+        extensions={POSTING_EXTENSIONS}
+        rows={7}
+        value={jdText}
+        onChange={(text) => {
+          setJdText(text);
+          onRefusal(null);
+        }}
+        onRefusal={onRefusal}
+      />
+      <DropTextarea
+        label="Your resume or evidence"
+        hint="Paste a resume in markdown, or drop a .md or .yaml file here"
+        field="evidence_text"
+        extensions={EVIDENCE_EXTENSIONS}
+        rows={7}
+        value={evidenceText}
+        onChange={(text) => {
+          setEvidenceText(text);
+          setOverride(null);
+          onRefusal(null);
+        }}
+        onRefusal={onRefusal}
+        footer={
+          evidenceText.trim() !== "" && (
+            <span className="format-label">
+              Read as {format === "yaml" ? "a structured evidence list" : "a resume"}
+              {" · "}
+              <button
+                type="button"
+                className="plain"
+                onClick={() => setOverride(format === "yaml" ? "markdown" : "yaml")}
+              >
+                read as {format === "yaml" ? "a resume" : "a structured evidence list"} instead
+              </button>
+            </span>
+          )
+        }
+      />
       <label>
-        Job posting text
-        <textarea
-          rows={6}
-          value={jdText}
-          onChange={(event) => setJdText(event.target.value)}
-          required
-        />
-      </label>
-      <label>
-        Evidence - a YAML corpus or a markdown resume
-        <textarea
-          rows={6}
-          value={evidenceText}
-          onChange={(event) => setEvidenceText(event.target.value)}
-          required
-        />
-      </label>
-      <fieldset className="format-toggle">
-        <legend className="empty-note">Evidence format</legend>
-        <label>
-          <input
-            type="radio"
-            name="format"
-            checked={format === "yaml"}
-            onChange={() => setFormat("yaml")}
-          />
-          YAML corpus
-        </label>
-        <label>
-          <input
-            type="radio"
-            name="format"
-            checked={format === "markdown"}
-            onChange={() => setFormat("markdown")}
-          />
-          markdown resume
-        </label>
-      </fieldset>
-      <label>
-        Upcoming round, optional - tailors strategy and questions, never matching
-        <input
-          type="text"
-          value={roundText}
-          onChange={(event) => setRoundText(event.target.value)}
-        />
-      </label>
-      <label>
-        Gemini API key
+        {provider === "gemini" ? "Gemini API key" : "Azure OpenAI API key"}
         <input
           type="password"
           value={apiKey}
@@ -204,23 +368,113 @@ function OwnKeyForm({
           required
         />
       </label>
-      <label>
-        Search API key, optional - enables the role research search path
-        <input
-          type="password"
-          value={searchKey}
-          onChange={(event) => setSearchKey(event.target.value)}
-          autoComplete="off"
-        />
-      </label>
       <p className="key-notice">
         Keys are held in this page's memory, sent once to create the session,
         never stored in this browser, and dropped with the session on the
         server.
       </p>
       <button className="primary" type="submit" disabled={busy}>
-        Start live session
+        Start with my posting
       </button>
     </form>
+  );
+}
+
+// A textarea that also takes a dropped or picked file. The file is read in
+// the browser; only its text ever leaves, through the same request a paste
+// would make.
+function DropTextarea({
+  label,
+  hint,
+  field,
+  extensions,
+  rows,
+  value,
+  onChange,
+  onRefusal,
+  footer,
+}: {
+  label: string;
+  hint: string;
+  field: BoundedField;
+  extensions: string[];
+  rows: number;
+  value: string;
+  onChange: (text: string) => void;
+  onRefusal: (message: string) => void;
+  footer?: ReactNode;
+}) {
+  const [dragging, setDragging] = useState(false);
+  const picker = useRef<HTMLInputElement | null>(null);
+
+  const take = async (file: File | undefined) => {
+    if (file === undefined) return;
+    const result = await readTextFile(file, extensions, field);
+    if ("refusal" in result) onRefusal(result.refusal);
+    else onChange(result.text);
+  };
+
+  const onDrop = (event: DragEvent<HTMLTextAreaElement>) => {
+    event.preventDefault();
+    setDragging(false);
+    void take(event.dataTransfer.files[0]);
+  };
+
+  return (
+    <label className={dragging ? "drop-target dragging" : "drop-target"}>
+      <span className="field-head">
+        {label}
+        <button type="button" className="plain" onClick={() => picker.current?.click()}>
+          pick a file
+        </button>
+      </span>
+      <textarea
+        rows={rows}
+        value={value}
+        placeholder={hint}
+        required
+        onChange={(event) => onChange(event.target.value)}
+        onDragOver={(event) => {
+          event.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={onDrop}
+      />
+      <input
+        ref={picker}
+        type="file"
+        accept={extensions.join(",")}
+        hidden
+        onChange={(event) => {
+          void take(event.target.files?.[0]);
+          event.target.value = "";
+        }}
+      />
+      {footer}
+    </label>
+  );
+}
+
+function BoundedTextInput({
+  label,
+  field,
+  rows,
+  value,
+  onChange,
+}: {
+  label: string;
+  field: BoundedField;
+  rows: number;
+  value: string;
+  onChange: (text: string) => void;
+}) {
+  const refusal = overCeiling(field, value.length);
+  return (
+    <label>
+      {label}
+      <textarea rows={rows} value={value} onChange={(event) => onChange(event.target.value)} />
+      {refusal !== null && <span className="error-line">{refusal}</span>}
+    </label>
   );
 }
