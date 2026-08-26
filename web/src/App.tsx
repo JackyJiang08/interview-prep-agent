@@ -1,14 +1,15 @@
-import { useEffect, useReducer, useRef, useState } from "react";
+import { useEffect, useReducer, useRef } from "react";
 
 import { streamUrl } from "./api";
 import { InterruptCard, ResolutionCard } from "./components/InterruptCard";
 import { Landing } from "./components/Landing";
 import { PackageView } from "./components/PackageView";
 import { StageRail } from "./components/StageRail";
+import { flowReducer, initialFlow } from "./flow";
 import { initialRunState, runReducer } from "./reducer";
 
 export default function App() {
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [flow, dispatch] = useReducer(flowReducer, initialFlow);
   return (
     <>
       <header className="app-header">
@@ -26,10 +27,14 @@ export default function App() {
         </a>
       </header>
       <main>
-        {sessionId === null ? (
-          <Landing onStart={setSessionId} />
+        {flow.screen === "landing" || flow.sessionId === null ? (
+          <Landing
+            form={flow.form}
+            dispatchForm={(action) => dispatch({ kind: "form", action })}
+            onStart={(sessionId) => dispatch({ kind: "started", sessionId })}
+          />
         ) : (
-          <RunScreen sessionId={sessionId} onReset={() => setSessionId(null)} />
+          <RunScreen sessionId={flow.sessionId} onReset={() => dispatch({ kind: "back" })} />
         )}
       </main>
     </>

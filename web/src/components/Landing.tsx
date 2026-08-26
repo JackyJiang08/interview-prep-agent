@@ -17,7 +17,8 @@ import {
   type EvidencePreview,
 } from "../api";
 import { displayTitle, SAMPLE_DEMO_ID } from "../demos";
-import { disclosureReducer, initialDisclosure, type Section } from "../disclosure";
+import type { Section } from "../disclosure";
+import type { FormAction, FormPatch, FormState, Provider, Resume } from "../form";
 import {
   describeKind,
   detectEvidenceFormat,
@@ -43,19 +44,11 @@ import {
   wakeReducer,
 } from "../wake";
 
-type Provider = "gemini" | "azure" | "anthropic";
-
 const KEY_LABELS: Record<Provider, string> = {
   gemini: "Gemini API key",
   azure: "Azure OpenAI API key",
   anthropic: "Anthropic API key",
 };
-
-// A loaded resume: where it came from, and the text that will be used.
-interface Resume {
-  filename: string | null;
-  text: string;
-}
 
 // What the server made of the resume text, kept current as it changes.
 type EvidenceCheck =
@@ -67,28 +60,47 @@ type EvidenceCheck =
 
 const CHECK_DEBOUNCE_MS = 400;
 
-export function Landing({ onStart }: { onStart: (sessionId: string) => void }) {
+export function Landing({
+  form,
+  dispatchForm,
+  onStart,
+}: {
+  form: FormState;
+  dispatchForm: (action: FormAction) => void;
+  onStart: (sessionId: string) => void;
+}) {
+  // Transient state: what the server has said so far, and what is in
+  // flight. The form itself lives above this page and outlasts it.
   const [demos, setDemos] = useState<Demo[] | null>(null);
   const [wake, dispatchWake] = useReducer(wakeReducer, initialWakeState);
-  const [open, dispatchOpen] = useReducer(disclosureReducer, initialDisclosure);
   const [starting, dispatchStart] = useReducer(startReducer, idleStart);
+  const [check, setCheck] = useState<EvidenceCheck>({ kind: "none" });
   const busy = starting.phase === "starting";
 
-  // The form.
-  const [jdText, setJdText] = useState("");
-  const [resume, setResume] = useState<Resume>({ filename: null, text: "" });
-  const [override, setOverride] = useState<EvidenceFormat | null>(null);
-  const [apiKey, setApiKey] = useState("");
-  const [check, setCheck] = useState<EvidenceCheck>({ kind: "none" });
-
-  // Advanced options ride along with every run, including the demos, so a
-  // visitor who wrote research notes sees them used.
-  const [provider, setProvider] = useState<Provider>("gemini");
-  const [roundText, setRoundText] = useState("");
-  const [researchText, setResearchText] = useState("");
-  const [searchKey, setSearchKey] = useState("");
-  const [azureEndpoint, setAzureEndpoint] = useState("");
-  const [azureDeployment, setAzureDeployment] = useState("");
+  const {
+    jdText,
+    resume,
+    override,
+    apiKey,
+    provider,
+    roundText,
+    researchText,
+    searchKey,
+    azureEndpoint,
+    azureDeployment,
+    open,
+  } = form;
+  const set = (patch: FormPatch) => dispatchForm({ kind: "set", patch });
+  const setJdText = (value: string) => set({ jdText: value });
+  const setResume = (value: Resume) => set({ resume: value });
+  const setOverride = (value: EvidenceFormat | null) => set({ override: value });
+  const setApiKey = (value: string) => set({ apiKey: value });
+  const setProvider = (value: Provider) => set({ provider: value });
+  const setRoundText = (value: string) => set({ roundText: value });
+  const setResearchText = (value: string) => set({ researchText: value });
+  const setSearchKey = (value: string) => set({ searchKey: value });
+  const setAzureEndpoint = (value: string) => set({ azureEndpoint: value });
+  const setAzureDeployment = (value: string) => set({ azureDeployment: value });
 
   useEffect(() => {
     if (wake.phase === "ready") return;
@@ -162,7 +174,7 @@ export function Landing({ onStart }: { onStart: (sessionId: string) => void }) {
   };
 
   const ready = wake.phase === "ready";
-  const toggle = (section: Section) => dispatchOpen({ kind: "toggle", section });
+  const toggle = (section: Section) => dispatchForm({ kind: "toggle", section });
   const detected = detectEvidenceFormat(resume.text);
   const format = override ?? detected;
 
