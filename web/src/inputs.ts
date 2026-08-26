@@ -56,13 +56,18 @@ export function detectEvidenceFormat(text: string): EvidenceFormat {
 }
 
 export const POSTING_EXTENSIONS = [".txt", ".md"];
-export const EVIDENCE_EXTENSIONS = [".md", ".markdown", ".yaml", ".yml"];
+export const EVIDENCE_EXTENSIONS = [".pdf", ".md", ".markdown", ".yaml", ".yml"];
+
+export function isPdf(name: string): boolean {
+  return acceptedFile(name, [".pdf"]);
+}
 
 // What the page calls a loaded resume: the shape the server will read it
 // as, in the reader's words. The format decides the label; the filename only
-// adds what the format cannot see.
-export function describeKind(format: EvidenceFormat): string {
-  return format === "yaml" ? "a YAML evidence list" : "a resume";
+// adds what the format cannot see - that the text came out of a PDF.
+export function describeKind(format: EvidenceFormat, filename: string | null = null): string {
+  if (format === "yaml") return "a YAML evidence list";
+  return filename !== null && isPdf(filename) ? "a resume, text read from the PDF" : "a resume";
 }
 
 export function acceptedFile(name: string, extensions: string[]): boolean {

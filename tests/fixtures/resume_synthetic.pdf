@@ -1,0 +1,95 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+2 0 obj
+<< /Length 615 >>
+stream
+BT
+72 740 Td
+/F1 16 Tf
+(JORDAN EXAMPLE) Tj
+0 -21 Td
+/F1 11 Tf
+(Data Analyst - Springfield) Tj
+0 -16 Td
+/F1 11 Tf
+0 -16 Td
+/F1 13 Tf
+(EXPERIENCE) Tj
+0 -18 Td
+/F1 11 Tf
+(Data Analyst, Example Co. \(2022 - present\)) Tj
+0 -16 Td
+/F1 11 Tf
+(• Owned funnel analysis for a subscription product, writing SQL) Tj
+0 -16 Td
+/F1 11 Tf
+(against a warehouse of roughly 40 million events.) Tj
+0 -16 Td
+/F1 11 Tf
+(• Built scheduled ETL pipelines loading application logs into a) Tj
+0 -16 Td
+/F1 11 Tf
+(cloud data warehouse, with row-count and freshness checks.) Tj
+0 -16 Td
+/F1 11 Tf
+0 -16 Td
+/F1 9 Tf
+(Page 1 of 2) Tj
+0 -14 Td
+ET
+endstream
+endobj
+3 0 obj
+<< /Type /Page /Parent 6 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R >> >> /Contents 2 0 R >>
+endobj
+4 0 obj
+<< /Length 279 >>
+stream
+BT
+72 740 Td
+/F1 9 Tf
+(Jordan Example - Resume) Tj
+0 -14 Td
+/F1 13 Tf
+(Skills) Tj
+0 -18 Td
+/F1 11 Tf
+(• SQL, Python, pandas, Airflow) Tj
+0 -16 Td
+/F1 11 Tf
+(• Funnel analysis, dashboarding, experiment readouts) Tj
+0 -16 Td
+/F1 11 Tf
+0 -16 Td
+/F1 9 Tf
+(Page 2 of 2) Tj
+0 -14 Td
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 6 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R >> >> /Contents 4 0 R >>
+endobj
+6 0 obj
+<< /Type /Pages /Kids [3 0 R 5 0 R] /Count 2 >>
+endobj
+7 0 obj
+<< /Type /Catalog /Pages 6 0 R >>
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000009 00000 n 
+0000000106 00000 n 
+0000000772 00000 n 
+0000000898 00000 n 
+0000001228 00000 n 
+0000001354 00000 n 
+0000001417 00000 n 
+trailer
+<< /Size 8 /Root 7 0 R >>
+startxref
+1466
+%%EOF

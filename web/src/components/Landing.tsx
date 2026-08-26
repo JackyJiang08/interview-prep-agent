@@ -7,13 +7,14 @@ import {
   type FormEvent,
 } from "react";
 
-import { createSession, fetchDemos, type CreateSessionBody } from "../api";
+import { createSession, extractResume, fetchDemos, type CreateSessionBody } from "../api";
 import { displayTitle, SAMPLE_DEMO_ID } from "../demos";
 import { disclosureReducer, initialDisclosure, type Section } from "../disclosure";
 import {
   describeKind,
   detectEvidenceFormat,
   EVIDENCE_EXTENSIONS,
+  isPdf,
   overCeiling,
   readTextFile,
   type BoundedField,
@@ -395,10 +396,27 @@ function ResumeDropZone({
   onRefusal: (message: string) => void;
 }) {
   const [dragging, setDragging] = useState(false);
+  const [reading, setReading] = useState<string | null>(null);
   const picker = useRef<HTMLInputElement | null>(null);
 
   const take = async (file: File | undefined) => {
     if (file === undefined) return;
+    if (isPdf(file.name)) {
+      // The server reads PDFs; the wait is named, and its text is checked
+      // against the same ceiling a paste would be.
+      setReading(`Reading ${file.name}`);
+      try {
+        const { text } = await extractResume(file);
+        const refusal = overCeiling("evidence_text", text.length);
+        if (refusal !== null) onRefusal(`${refusal}; nothing was read`);
+        else onLoaded({ filename: file.name, text });
+      } catch (cause) {
+        onRefusal(cause instanceof Error ? cause.message : "the PDF could not be read");
+      } finally {
+        setReading(null);
+      }
+      return;
+    }
     const result = await readTextFile(file, EVIDENCE_EXTENSIONS, "evidence_text");
     if ("refusal" in result) onRefusal(result.refusal);
     else onLoaded({ filename: file.name, text: result.text });
@@ -430,12 +448,15 @@ function ResumeDropZone({
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
       >
+        {reading !== null && (
+          <span role="status">{reading}</span>
+        )}
         {loaded ? (
           <>
             <span>
               <span className="file-name">{resume.filename}</span>
               {" - read as "}
-              {describeKind(format)}
+              {describeKind(format, resume.filename)}
               {" · "}
               <button type="button" className="plain" onClick={onOverride}>
                 read as {describeKind(other)} instead
@@ -444,7 +465,7 @@ function ResumeDropZone({
             <span className="drop-again">Drop another file to replace it, or {browse}</span>
           </>
         ) : (
-          <span>Drop your resume here - markdown, or YAML evidence · {browse}</span>
+          <span>Drop your resume here - PDF, markdown, or YAML evidence · {browse}</span>
         )}
       </div>
       <input

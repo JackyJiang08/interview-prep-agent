@@ -67,6 +67,9 @@ class Settings(BaseModel):
     max_evidence_chars: int = Field(default=50_000, ge=1)
     max_answer_chars: int = Field(default=4_000, ge=1)
     max_round_chars: int = Field(default=2_000, ge=1)
+    # The one upload the server reads itself: a PDF resume, whose text is
+    # extracted and handed back for the client to review before any session.
+    max_resume_pdf_bytes: int = Field(default=5_000_000, ge=1)
     cors_origins: list[str] = Field(default_factory=list)
 
 

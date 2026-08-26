@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createSession, describeTransportFailure, streamUrl } from "./api";
+import {
+  createSession,
+  describeTransportFailure,
+  encodeBase64,
+  extractResume,
+  streamUrl,
+} from "./api";
 
 describe("the socket url", () => {
   it("opens wss on an https page and ws on an http one, on the page's host", () => {
@@ -82,5 +88,61 @@ describe("session creation", () => {
     const wrapped = new TypeError("fetch failed", { cause: { name: "TimeoutError" } });
     expect(describeTransportFailure(wrapped)).toContain("did not answer");
     expect(describeTransportFailure(new TypeError("fetch failed"))).toContain("never reached");
+  });
+});
+
+describe("pdf extraction", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("sends the file's bytes as base64 with its name and returns the text", async () => {
+    const calls: { url: string; body: unknown }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init: RequestInit) => {
+        calls.push({ url, body: JSON.parse(String(init.body)) });
+        return new Response(JSON.stringify({ text: "## Skills\n- SQL", pages: 1 }), {
+          status: 200,
+        });
+      }),
+    );
+    const file = new File([new Uint8Array([37, 80, 68, 70, 0, 255])], "Resume.PDF");
+    expect(await extractResume(file)).toEqual({ text: "## Skills\n- SQL", pages: 1 });
+    expect(calls[0].url).toBe("/api/extract-resume");
+    expect(calls[0].body).toEqual({ filename: "Resume.PDF", content_base64: "JVBERgD/" });
+  });
+
+  it("surfaces the server's refusal for a scan, in its own words", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              error: {
+                category: "no_text_layer",
+                message: "this PDF has no text layer - it is likely a scan; paste the resume text instead",
+              },
+            }),
+            { status: 422 },
+          ),
+      ),
+    );
+    await expect(extractResume(new File(["x"], "scan.pdf"))).rejects.toThrow(
+      "paste the resume text instead",
+    );
+  });
+
+  it("turns a non-json failure into a plain sentence", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("<html>502</html>", { status: 502 })));
+    await expect(extractResume(new File(["x"], "resume.pdf"))).rejects.toThrow(
+      "status 502 instead of the resume text",
+    );
+  });
+
+  it("encodes bytes of any length, including past one chunk", () => {
+    expect(encodeBase64(new Uint8Array([]))).toBe("");
+    expect(encodeBase64(new Uint8Array([104, 105]))).toBe("aGk=");
+    const long = new Uint8Array(0x8000 + 3).fill(65);
+    expect(atob(encodeBase64(long)).length).toBe(0x8000 + 3);
   });
 });

@@ -10,6 +10,8 @@ from a key that lives only in the session object.
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
 import json
 import os
 from contextlib import asynccontextmanager
@@ -26,6 +28,7 @@ from ..config import Settings, load_settings
 from ..providers import PROVIDERS, ProviderError
 from .demo import demo_inputs, demo_provider, list_demos
 from .driver import DISCONNECTED, start_run
+from .extract import ExtractionRefused, extract_resume
 from .sessions import SessionRefused, SessionStore
 
 CLEANUP_INTERVAL_SECONDS = 60
@@ -73,6 +76,13 @@ class CreateSession(BaseModel):
     azure_api_key: str | None = None
     azure_endpoint: str | None = None
     azure_deployment: str | None = None
+
+
+class ExtractResume(BaseModel):
+    """A PDF resume, base64 in a JSON body so no multipart parser is needed."""
+
+    filename: str = ""
+    content_base64: str
 
 
 def _refusal(status_code: int, category: str, message: str) -> JSONResponse:
@@ -201,6 +211,47 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             **inputs,
         )
         return JSONResponse(status_code=201, content={"session_id": session.session_id})
+
+    @app.post("/api/extract-resume")
+    async def extract_resume_text(body: ExtractResume) -> Any:
+        """Extract a PDF resume's text for the client to review.
+
+        The one upload the server reads itself. Nothing here touches a
+        session: the text goes back to the browser, is shown for correction,
+        and arrives again as ordinary evidence text when a session starts.
+        """
+        if not body.filename.lower().endswith(".pdf"):
+            return _refusal(
+                400,
+                "unsupported_file",
+                "only a .pdf file is extracted here; markdown and YAML are read in the browser",
+            )
+        ceiling = settings.max_resume_pdf_bytes
+        # Base64 inflates by a third, so an oversized upload is refused before
+        # it is decoded at all.
+        if len(body.content_base64) > ceiling * 4 // 3 + 4:
+            return _refusal(
+                413, "input_too_large", f"the resume exceeds the {ceiling}-byte ceiling"
+            )
+        try:
+            data = base64.b64decode(body.content_base64, validate=True)
+        except (ValueError, binascii.Error):
+            return _refusal(400, "bad_encoding", "the file content is not valid base64")
+        if len(data) > ceiling:
+            return _refusal(
+                413, "input_too_large", f"the resume exceeds the {ceiling}-byte ceiling"
+            )
+        try:
+            text, pages = await asyncio.to_thread(extract_resume, data)
+        except ExtractionRefused as refused:
+            return _refusal(refused.status_code, refused.category, refused.message)
+        if len(text) > settings.max_evidence_chars:
+            return _refusal(
+                413,
+                "input_too_large",
+                f"the extracted text exceeds the {settings.max_evidence_chars}-character ceiling",
+            )
+        return {"text": text, "pages": pages, "characters": len(text)}
 
     @app.get("/api/sessions/{session_id}")
     async def session_view(session_id: str) -> dict[str, Any]:

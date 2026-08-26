@@ -7,6 +7,7 @@ import {
   detectEvidenceFormat,
   EVIDENCE_EXTENSIONS,
   INPUT_CEILINGS,
+  isPdf,
   overCeiling,
   POSTING_EXTENSIONS,
   readTextFile,
@@ -74,6 +75,8 @@ describe("the kind label", () => {
   it("names what the server will read, in the reader's words", () => {
     expect(describeKind("yaml")).toBe("a YAML evidence list");
     expect(describeKind("markdown")).toBe("a resume");
+    expect(describeKind("markdown", "Resume.PDF")).toBe("a resume, text read from the PDF");
+    expect(describeKind("markdown", "resume.md")).toBe("a resume");
   });
 });
 
@@ -93,9 +96,13 @@ describe("file reading", () => {
     expect(acceptedFile("resume.md", EVIDENCE_EXTENSIONS)).toBe(true);
     expect(acceptedFile("corpus.yml", EVIDENCE_EXTENSIONS)).toBe(true);
     expect(acceptedFile("RESUME.YAML", EVIDENCE_EXTENSIONS)).toBe(true);
-    expect(acceptedFile("resume.pdf", EVIDENCE_EXTENSIONS)).toBe(false);
+    expect(acceptedFile("resume.pdf", EVIDENCE_EXTENSIONS)).toBe(true);
+    expect(acceptedFile("Resume.PDF", EVIDENCE_EXTENSIONS)).toBe(true);
+    expect(isPdf("Resume.PDF")).toBe(true);
+    expect(isPdf("resume.md")).toBe(false);
+    expect(acceptedFile("resume.docx", EVIDENCE_EXTENSIONS)).toBe(false);
     expect(describeExtensions(POSTING_EXTENSIONS)).toBe(".txt or .md");
-    expect(describeExtensions(EVIDENCE_EXTENSIONS)).toBe(".md, .markdown, .yaml or .yml");
+    expect(describeExtensions(EVIDENCE_EXTENSIONS)).toBe(".pdf, .md, .markdown, .yaml or .yml");
   });
 
   it("returns the text of an accepted file", async () => {
@@ -106,10 +113,10 @@ describe("file reading", () => {
   });
 
   it("refuses the wrong kind without reading it", async () => {
-    const file = new File(["%PDF"], "resume.pdf");
+    const file = new File(["PK"], "resume.docx");
     const result = await readTextFile(file, EVIDENCE_EXTENSIONS, "evidence_text");
     expect(result).toEqual({
-      refusal: "that file is not .md, .markdown, .yaml or .yml; nothing was read",
+      refusal: "that file is not .pdf, .md, .markdown, .yaml or .yml; nothing was read",
     });
   });
 

@@ -68,6 +68,58 @@ export async function createSession(
   return payload.session_id;
 }
 
+export interface ExtractedResume {
+  text: string;
+  pages: number;
+}
+
+// A PDF is the one file the browser cannot read itself. Its bytes go to the
+// server as base64 and its text comes back for the visitor to review; every
+// failure is a sentence, in the same shape as session creation.
+export async function extractResume(
+  file: File,
+  timeoutMs: number = START_TIMEOUT_MS,
+): Promise<ExtractedResume> {
+  const content_base64 = encodeBase64(new Uint8Array(await file.arrayBuffer()));
+  let response: Response;
+  try {
+    response = await fetch("/api/extract-resume", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename: file.name, content_base64 }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (cause) {
+    throw new Error(describeTransportFailure(cause));
+  }
+  const payload = (await response.json().catch(() => null)) as {
+    text?: unknown;
+    pages?: unknown;
+    error?: { message?: unknown };
+  } | null;
+  if (!response.ok) {
+    const sent = payload?.error?.message;
+    throw new Error(
+      typeof sent === "string"
+        ? sent
+        : `the server answered with status ${response.status} instead of the resume text; try again in a moment`,
+    );
+  }
+  if (typeof payload?.text !== "string") {
+    throw new Error("the server answered without the resume text; try again in a moment");
+  }
+  return { text: payload.text, pages: typeof payload.pages === "number" ? payload.pages : 0 };
+}
+
+export function encodeBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const chunk = 0x8000; // keeps the spread below the argument limit
+  for (let offset = 0; offset < bytes.length; offset += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunk));
+  }
+  return btoa(binary);
+}
+
 export function describeTransportFailure(cause: unknown): string {
   return isTimeout(cause)
     ? "the server did not answer within a minute - it may still be waking; try again"
