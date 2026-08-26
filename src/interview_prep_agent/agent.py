@@ -68,6 +68,7 @@ WORKFLOW_RESULT_FIELDS = (
     "evidence",
     "research_findings",
     "requirements",
+    "dropped_requirements",
     "matches",
     "focus_areas",
     "strategy",
@@ -133,6 +134,9 @@ class AgentState(TypedDict, total=False):
     evidence: list[EvidenceItem]
     research_findings: list[ResearchFinding]
     requirements: list[Requirement]
+    # Extracted lines the guard refused, with reasons; carried so the trace
+    # and the artifacts can show them.
+    dropped_requirements: list[dict[str, Any]]
     matches: list[RequirementMatch]
     focus_areas: list[FocusArea]
     strategy: InterviewStrategy | None
@@ -304,6 +308,7 @@ def build_agent_graph(
     min_requirements: int = 1,
     max_requirements: int = 50,
     min_questions: int = 8,
+    min_requirement_chars: int = 12,
 ):
     """Compile the evidence-gated loop.
 
@@ -354,6 +359,7 @@ def build_agent_graph(
         min_requirements=min_requirements,
         max_requirements=max_requirements,
         min_questions=min_questions,
+        min_requirement_chars=min_requirement_chars,
         max_search_queries=max_search_queries,
         max_research_findings=max_research_findings,
     )
@@ -621,6 +627,7 @@ def run_agent(
         max_matches=settings.max_matches_per_requirement,
         min_requirements=settings.min_requirements,
         max_requirements=settings.max_requirements,
+        min_requirement_chars=settings.min_requirement_chars,
     )
     config = {"configurable": {"thread_id": thread_id}}
 
@@ -674,6 +681,8 @@ def run_agent(
                 }
                 if update.get("final_note"):
                     entry["note"] = update["final_note"]
+                if update.get("dropped_requirements"):
+                    entry["dropped"] = update["dropped_requirements"]
                 if not update.get("package_valid") and update.get("validation_errors"):
                     entry["errors"] = update["validation_errors"]
                 append(entry)

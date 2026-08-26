@@ -18,6 +18,7 @@ from ..corpus import CorpusError
 from ..providers import ProviderError, StructuredModel
 from ..search import SearchError, SearchProvider
 from ..workflow.gates import QualityGateError
+from ..workflow.pipeline import _resolve_extractor, _resolve_matcher
 from .sessions import Session
 
 # Sentinel put on the answer queue when the client goes away, so the blocked
@@ -81,6 +82,11 @@ def start_run(session: Session, settings: Settings, model: StructuredModel) -> N
                 settings,
                 session.artifacts_dir,
                 model=model,
+                # The root cause of a live run that read section headings as
+                # requirements: these two were never passed, so every session
+                # ran the lexical stages regardless of the key it carried.
+                extractor=_resolve_extractor(session.extractor, model),
+                matcher=_resolve_matcher(session.matcher, model),
                 round_text=session.round_text,
                 research_text=session.research_text,
                 search=build_session_search(session),

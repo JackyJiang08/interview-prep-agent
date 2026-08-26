@@ -12,6 +12,10 @@ import type { EvidenceFormat } from "./inputs";
 
 export type Provider = "gemini" | "azure" | "anthropic";
 
+// How the posting is read and matched. "llm" is the default for a run with
+// a key; "lexical" makes no model calls for those two stages.
+export type Stages = "llm" | "lexical";
+
 // A loaded resume: where it came from, and the text that will be used.
 export interface Resume {
   filename: string | null;
@@ -24,6 +28,7 @@ export interface FormState {
   override: EvidenceFormat | null;
   apiKey: string;
   provider: Provider;
+  stages: Stages;
   roundText: string;
   researchText: string;
   searchKey: string;
@@ -38,6 +43,7 @@ export const initialForm: FormState = {
   override: null,
   apiKey: "",
   provider: "gemini",
+  stages: "llm",
   roundText: "",
   researchText: "",
   searchKey: "",

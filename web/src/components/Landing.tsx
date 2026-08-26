@@ -18,7 +18,7 @@ import {
 } from "../api";
 import { displayTitle, SAMPLE_DEMO_ID } from "../demos";
 import type { Section } from "../disclosure";
-import type { FormAction, FormPatch, FormState, Provider, Resume } from "../form";
+import type { FormAction, FormPatch, FormState, Provider, Resume, Stages } from "../form";
 import {
   describeKind,
   detectEvidenceFormat,
@@ -83,6 +83,7 @@ export function Landing({
     override,
     apiKey,
     provider,
+    stages,
     roundText,
     researchText,
     searchKey,
@@ -96,6 +97,7 @@ export function Landing({
   const setOverride = (value: EvidenceFormat | null) => set({ override: value });
   const setApiKey = (value: string) => set({ apiKey: value });
   const setProvider = (value: Provider) => set({ provider: value });
+  const setStages = (value: Stages) => set({ stages: value });
   const setRoundText = (value: string) => set({ roundText: value });
   const setResearchText = (value: string) => set({ researchText: value });
   const setSearchKey = (value: string) => set({ searchKey: value });
@@ -234,6 +236,8 @@ export function Landing({
       evidence_text: resume.text,
       evidence_format: format,
       provider,
+      extractor: stages,
+      matcher: stages,
       ...(provider === "gemini"
         ? { gemini_api_key: apiKey }
         : provider === "azure"
@@ -367,6 +371,31 @@ export function Landing({
                   onChange={() => setProvider("anthropic")}
                 />
                 Claude
+              </label>
+            </fieldset>
+            <fieldset className="choice-row">
+              <legend className="empty-note">
+                Reading and matching. The model reads the posting and judges
+                coverage by default; the word-overlap path makes no model calls
+                for those two stages.
+              </legend>
+              <label>
+                <input
+                  type="radio"
+                  name="stages"
+                  checked={stages === "llm"}
+                  onChange={() => setStages("llm")}
+                />
+                Model-backed (default)
+              </label>
+              <label>
+                <input
+                  type="radio"
+                  name="stages"
+                  checked={stages === "lexical"}
+                  onChange={() => setStages("lexical")}
+                />
+                Word overlap only
               </label>
             </fieldset>
             {provider === "azure" && (

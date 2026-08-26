@@ -37,6 +37,11 @@ class Settings(BaseModel):
     # it is a signal worth failing on.
     min_requirements: int = Field(default=1, ge=0)
     max_requirements: int = Field(default=50, ge=1)
+    # A deterministic guard after extraction, model-backed or not: anything
+    # shorter than this, and anything shaped like a section heading or a
+    # salary or equal-opportunity statement, is dropped with its reason
+    # recorded rather than asked about as a gap.
+    min_requirement_chars: int = Field(default=12, ge=0)
 
     # Bounds on the decision loop, enforced by code rather than suggested in
     # a prompt. The question ceiling is optional: None means every gap is

@@ -27,6 +27,7 @@ from .graph import PrepState, WorkflowState, build_prep_workflow, build_workflow
 from .match_model import match_evidence_with_model
 
 REQUIREMENTS_ARTIFACT = "requirements.json"
+DROPPED_ARTIFACT = "dropped_requirements.json"
 MATCHES_ARTIFACT = "matches.json"
 FOCUS_AREAS_ARTIFACT = "focus_areas.json"
 PLAN_ARTIFACT = "focus_plan.json"
@@ -104,6 +105,7 @@ def run_workflow(
         max_matches=settings.max_matches_per_requirement,
         min_requirements=settings.min_requirements,
         max_requirements=settings.max_requirements,
+        min_requirement_chars=settings.min_requirement_chars,
     )
     return workflow.invoke({"job_description": job_description, "evidence": list(evidence)})
 
@@ -238,6 +240,7 @@ def run_prep(
         max_matches=settings.max_matches_per_requirement,
         min_requirements=settings.min_requirements,
         max_requirements=settings.max_requirements,
+        min_requirement_chars=settings.min_requirement_chars,
         max_search_queries=settings.max_search_queries,
         max_research_findings=settings.max_research_findings,
     )
@@ -263,6 +266,7 @@ def _write_prep_artifacts(output_dir: Path, state: PrepState) -> None:
         output_dir / REQUIREMENTS_ARTIFACT,
         [item.model_dump(mode="json", exclude_none=True) for item in state.get("requirements", [])],
     )
+    _dump(output_dir / DROPPED_ARTIFACT, list(state.get("dropped_requirements", []) or []))
     _dump(
         output_dir / MATCHES_ARTIFACT,
         [item.model_dump(mode="json") for item in state.get("matches", [])],
@@ -294,6 +298,7 @@ def _write_prep_artifacts(output_dir: Path, state: PrepState) -> None:
 
 
 __all__ = [
+    "DROPPED_ARTIFACT",
     "EXTRACTORS",
     "FOCUS_AREAS_ARTIFACT",
     "LEXICAL",

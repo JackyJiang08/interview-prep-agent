@@ -9,6 +9,8 @@ export interface CreateSessionBody {
   round_text?: string;
   research_text?: string;
   provider?: "gemini" | "azure" | "anthropic";
+  extractor?: "lexical" | "llm";
+  matcher?: "lexical" | "llm";
   gemini_api_key?: string;
   anthropic_api_key?: string;
   azure_api_key?: string;

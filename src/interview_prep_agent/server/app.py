@@ -72,6 +72,11 @@ class CreateSession(BaseModel):
     round_text: str = ""
     research_text: str = ""
     provider: str = Field(default="gemini", pattern="^(gemini|azure|anthropic)$")
+    # Stage overrides. Omitted means the right default for the mode: a live
+    # session runs model-backed extraction and matching end to end, a demo
+    # keeps the lexical path its fixtures were recorded with.
+    extractor: str | None = Field(default=None, pattern="^(lexical|llm)$")
+    matcher: str | None = Field(default=None, pattern="^(lexical|llm)$")
     gemini_api_key: str | None = None
     anthropic_api_key: str | None = None
     tavily_api_key: str | None = None
@@ -206,11 +211,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if refusal is not None:
                 return refusal
 
+        stage_default = "llm" if body.mode == "live" else "lexical"
         session = store.create(
             client_ip=client_ip,
             mode=body.mode,
             demo_id=body.demo_id if body.mode == "demo" else None,
             provider=body.provider,
+            extractor=body.extractor or stage_default,
+            matcher=body.matcher or stage_default,
             api_key=_provider_key(body) if body.mode == "live" else None,
             search_api_key=body.tavily_api_key if body.mode == "live" else None,
             azure_endpoint=body.azure_endpoint if body.mode == "live" else None,

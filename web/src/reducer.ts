@@ -188,6 +188,13 @@ function resolvePending(
   };
 }
 
+// Lines the guard refused as not being requirements, never hidden.
+function droppedNote(delta: Record<string, unknown>): string {
+  const dropped = delta.dropped;
+  if (!Array.isArray(dropped) || dropped.length === 0) return "";
+  return `; ${dropped.length} line${dropped.length === 1 ? "" : "s"} set aside as not requirements`;
+}
+
 function summarize(node: string, delta: Record<string, unknown>): string {
   switch (node) {
     case "parse_round": {
@@ -196,10 +203,12 @@ function summarize(node: string, delta: Record<string, unknown>): string {
         ? `round context: ${round.round_type}`
         : "no round context; preparing generally";
     }
-    case "generate_initial":
-      return delta.package_valid
+    case "generate_initial": {
+      const base = delta.package_valid
         ? "initial package generated and valid"
         : "initial package failed validation";
+      return `${base}${droppedNote(delta)}`;
+    }
     case "observe": {
       if (typeof delta.stop_reason === "string") return "action budget exhausted";
       if (typeof delta.selected === "string")
@@ -228,7 +237,8 @@ function summarize(node: string, delta: Record<string, unknown>): string {
       const base = delta.package_valid
         ? "final package generated and valid"
         : "final package failed validation";
-      return typeof delta.note === "string" ? `${base} (${delta.note})` : base;
+      const noted = typeof delta.note === "string" ? `${base} (${delta.note})` : base;
+      return `${noted}${droppedNote(delta)}`;
     }
     case "invalid":
       return "terminated without a package";

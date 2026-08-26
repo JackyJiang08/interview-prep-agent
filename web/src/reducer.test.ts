@@ -181,6 +181,27 @@ describe("unknown input", () => {
   });
 });
 
+describe("guarded extraction", () => {
+  it("names the lines the guard set aside, never hiding them", () => {
+    const state = play([
+      msg({
+        type: "node_update",
+        node: "generate_initial",
+        delta: {
+          package_valid: true,
+          dropped: [
+            { id: "REQ-001", text: "Job description", reason: "reads as a section heading" },
+            { id: "REQ-009", text: "Salary range $90,000", reason: "reads as a salary statement" },
+          ],
+        },
+      }),
+    ]);
+    expect(state.stages[0].summary).toBe(
+      "initial package generated and valid; 2 lines set aside as not requirements",
+    );
+  });
+});
+
 describe("research findings", () => {
   it("carries findings off the package event", () => {
     const state = play([

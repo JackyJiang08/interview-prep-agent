@@ -46,6 +46,10 @@ class Session:
     # Live-mode credentials. In memory only, for provider construction;
     # excluded from every serialization of the session and dropped with it.
     provider: str = "gemini"
+    # Stage implementations. A live session defaults both to the model-backed
+    # path; a demo keeps the lexical one its fixtures were recorded with.
+    extractor: str = "lexical"
+    matcher: str = "lexical"
     api_key: str | None = None
     search_api_key: str | None = None
     azure_endpoint: str | None = None
@@ -64,6 +68,8 @@ class Session:
             "session_id": self.session_id,
             "mode": self.mode,
             "provider": self.provider if self.mode == "live" else None,
+            "extractor": self.extractor,
+            "matcher": self.matcher,
             "demo_id": self.demo_id,
             "status": self.status,
             "stop_reason": self.stop_reason,

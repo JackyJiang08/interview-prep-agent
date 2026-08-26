@@ -56,6 +56,7 @@ from .gates import (
     collect_package_errors,
     collect_requirement_errors,
 )
+from .guard import guard_requirements
 from .match import match_requirements
 from .plan import build_focus_plan
 from .questions import generate_questions_with_model
@@ -78,6 +79,8 @@ class WorkflowState(TypedDict, total=False):
     evidence: list[EvidenceItem]
     # grounded intermediates
     requirements: list[Requirement]
+    # Extracted lines the guard refused, each with its reason; never silent.
+    dropped_requirements: list[dict[str, Any]]
     matches: list[RequirementMatch]
     focus_areas: list[FocusArea]
     plan: FocusPlan | None
@@ -101,6 +104,7 @@ def build_workflow(
     max_matches: int = 3,
     min_requirements: int = 1,
     max_requirements: int = 50,
+    min_requirement_chars: int = 12,
 ):
     """Compile the workflow.
 
@@ -122,7 +126,10 @@ def build_workflow(
     """
 
     def extract(state: WorkflowState) -> dict[str, Any]:
-        return {"requirements": extractor(state["job_description"])}
+        kept, dropped = guard_requirements(
+            extractor(state["job_description"]), min_requirement_chars
+        )
+        return {"requirements": kept, "dropped_requirements": dropped}
 
     def validate_requirements(state: WorkflowState) -> dict[str, Any]:
         errors = collect_requirement_errors(
@@ -228,6 +235,7 @@ class PrepState(TypedDict, total=False):
     evidence: list[EvidenceItem]
     # grounded intermediates
     requirements: list[Requirement]
+    dropped_requirements: list[dict[str, Any]]
     matches: list[RequirementMatch]
     focus_areas: list[FocusArea]
     # preparation outputs
@@ -260,6 +268,7 @@ def build_prep_workflow(
     min_requirements: int = 1,
     max_requirements: int = 50,
     min_questions: int = 8,
+    min_requirement_chars: int = 12,
     max_search_queries: int = 3,
     max_research_findings: int = 12,
 ):
@@ -321,14 +330,16 @@ def build_prep_workflow(
         return {"evidence": items}
 
     def extract_requirements_node(state: PrepState) -> dict[str, Any]:
-        requirements = extractor(state["job_description"])
+        kept, dropped = guard_requirements(
+            extractor(state["job_description"]), min_requirement_chars
+        )
         check_requirements(
             state["job_description"],
-            requirements,
+            kept,
             min_requirements=min_requirements,
             max_requirements=max_requirements,
         )
-        return {"requirements": requirements}
+        return {"requirements": kept, "dropped_requirements": dropped}
 
     def match(state: PrepState) -> dict[str, Any]:
         if matcher is not None:
