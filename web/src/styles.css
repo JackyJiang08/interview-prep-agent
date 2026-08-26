@@ -70,6 +70,10 @@ textarea::placeholder { color: var(--muted); opacity: 0.8; }
 .drop-zone.dragging { border-color: var(--accent); background: var(--accent-soft); }
 .drop-zone .file-name { color: var(--ink); font-weight: 600; word-break: break-all; }
 .drop-zone .drop-again { font-size: 13px; }
+.check-line { display: grid; gap: 4px; }
+.check-line p { margin: 0; }
+.check-summaries { margin: 0; padding-left: 18px; font-size: 13px; color: var(--muted); }
+.check-summaries li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .preview-toggle { margin-top: 0; font-weight: 500; }
 .preview { margin-top: 4px; }
 .key-notice { font-size: 13px; color: var(--muted); margin: 0; }

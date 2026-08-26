@@ -332,3 +332,60 @@ def test_the_content_security_policy_matches_what_the_page_loads(client):
         assert "'self'" in connect
         assert "ws://testserver" in connect and "wss://testserver" in connect
         assert directives["frame-ancestors"] == "'none'"
+
+
+# --- evidence preview ---------------------------------------------------------
+
+
+def test_preview_reports_the_count_and_first_summaries(client):
+    response = client.post(
+        "/api/preview-evidence",
+        json={
+            "evidence_text": (
+                "## Work\n\n- First achievement here\n- Second achievement here\n"
+                "- Third one\n- Fourth one\n"
+            ),
+            "evidence_format": "markdown",
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["count"] == 4
+    assert body["summaries"] == ["First achievement here", "Second achievement here", "Third one"]
+
+
+def test_preview_reads_a_yaml_corpus_too(client):
+    response = client.post(
+        "/api/preview-evidence",
+        json={"evidence_text": "- id: EV-001\n  summary: SQL work\n", "evidence_format": "yaml"},
+    )
+    assert response.status_code == 200
+    assert response.json()["count"] == 1
+
+
+def test_preview_refuses_empty_and_unreadable_text_with_a_category(client):
+    blank = client.post("/api/preview-evidence", json={"evidence_text": "   \n"})
+    assert blank.status_code == 422
+    assert blank.json()["error"]["category"] == "empty_evidence"
+
+    furniture = client.post("/api/preview-evidence", json={"evidence_text": "Page 1 of 1\n---\n"})
+    assert furniture.status_code == 422
+    body = furniture.json()["error"]
+    assert body["category"] == "empty_evidence"
+    assert "no readable content" in body["message"]
+
+    broken = client.post(
+        "/api/preview-evidence",
+        json={
+            "evidence_text": "- id: EV-001\n  summary: SQL\n- id: EV-001\n  summary: dup\n",
+            "evidence_format": "yaml",
+        },
+    )
+    assert broken.status_code == 422
+    assert broken.json()["error"]["category"] == "invalid_evidence"
+
+
+def test_preview_honors_the_evidence_ceiling():
+    with TestClient(create_app(Settings(max_evidence_chars=10))) as client:
+        response = client.post("/api/preview-evidence", json={"evidence_text": "x" * 11})
+    assert response.status_code == 413

@@ -25,6 +25,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from ..config import Settings, load_settings
+from ..corpus import CorpusError, parse_evidence_corpus, parse_evidence_markdown
 from ..providers import PROVIDERS, ProviderError
 from .demo import demo_inputs, demo_provider, list_demos
 from .driver import DISCONNECTED, start_run
@@ -84,6 +85,16 @@ class ExtractResume(BaseModel):
 
     filename: str = ""
     content_base64: str
+
+
+class PreviewEvidence(BaseModel):
+    """Evidence text to read without starting anything."""
+
+    evidence_text: str = ""
+    evidence_format: str = Field(default="markdown", pattern="^(yaml|markdown)$")
+
+
+PREVIEW_SUMMARIES = 3
 
 
 def _refusal(status_code: int, category: str, message: str) -> JSONResponse:
@@ -208,6 +219,44 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             **inputs,
         )
         return JSONResponse(status_code=201, content={"session_id": session.session_id})
+
+    @app.post("/api/preview-evidence")
+    async def preview_evidence(body: PreviewEvidence) -> Any:
+        """Read evidence text the way a run would, and report what was read.
+
+        A dry run of the corpus reader, so the page can show how many items
+        a resume yields before a session starts — and refuse to start one on
+        text already known to yield nothing.
+        """
+        text = body.evidence_text
+        if len(text) > settings.max_evidence_chars:
+            return _refusal(
+                413,
+                "input_too_large",
+                f"the evidence exceeds the {settings.max_evidence_chars}-character ceiling",
+            )
+        if not text.strip():
+            return _refusal(422, "empty_evidence", "nothing to read yet")
+        try:
+            items = (
+                parse_evidence_markdown(text)
+                if body.evidence_format == "markdown"
+                else parse_evidence_corpus(text, "the evidence")
+            )
+        except CorpusError as error:
+            category = (
+                "empty_evidence" if "no readable content" in str(error) else "invalid_evidence"
+            )
+            return _refusal(422, category, str(error))
+        except Exception:  # noqa: BLE001 - a malformed corpus must never be a crash
+            return _refusal(
+                422, "invalid_evidence", "the evidence could not be read in this format"
+            )
+        return {
+            "count": len(items),
+            "summaries": [item.summary[:160] for item in items[:PREVIEW_SUMMARIES]],
+            "format": body.evidence_format,
+        }
 
     @app.post("/api/extract-resume")
     async def extract_resume_text(body: ExtractResume) -> Any:

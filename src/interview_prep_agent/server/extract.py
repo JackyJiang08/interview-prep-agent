@@ -15,28 +15,9 @@ import re
 from collections import Counter
 from io import BytesIO
 
-BULLET_MARKERS = "•·▪○●◦‣–—*-"
+from ..corpus import looks_like_heading
 
-# Section titles a resume states in words. Matched whole, case-insensitively.
-HEADING_WORDS = {
-    "summary",
-    "profile",
-    "objective",
-    "experience",
-    "work experience",
-    "professional experience",
-    "employment",
-    "education",
-    "skills",
-    "technical skills",
-    "projects",
-    "publications",
-    "certifications",
-    "awards",
-    "languages",
-    "interests",
-    "volunteering",
-}
+BULLET_MARKERS = "•·▪○●◦‣–—*-"
 
 _PAGE_NUMBER = re.compile(r"^\s*(page\s*)?\d+\s*((of|/)\s*\d+)?\s*$", re.IGNORECASE)
 _BULLET = re.compile(rf"^\s*[{re.escape(BULLET_MARKERS)}]\s+(?P<rest>\S.*)$")
@@ -106,7 +87,7 @@ def normalize_resume_text(pages: list[str]) -> str:
                     output.append("")
                 output.append(f"- {bullet.group('rest').strip()}")
                 last_kind = "bullet"
-            elif _is_heading(line):
+            elif looks_like_heading(line):
                 if last_kind != "blank":
                     output.append("")
                 output.append(f"## {line.rstrip(':')}")
@@ -134,14 +115,3 @@ def _repeated_lines(pages: list[str]) -> set[str]:
         for line in {raw.strip() for raw in page.splitlines() if raw.strip()}:
             counts[line] += 1
     return {line for line, count in counts.items() if count == len(pages)}
-
-
-def _is_heading(line: str) -> bool:
-    words = line.rstrip(":").split()
-    if not words or len(words) > 6 or line.endswith((".", ",", ";")):
-        return False
-    lowered = " ".join(words).lower()
-    if lowered in HEADING_WORDS:
-        return True
-    letters = [char for char in line if char.isalpha()]
-    return len(letters) >= 3 and all(char.isupper() for char in letters)

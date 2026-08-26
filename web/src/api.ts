@@ -112,6 +112,64 @@ export async function extractResume(
   return { text: payload.text, pages: typeof payload.pages === "number" ? payload.pages : 0 };
 }
 
+export interface EvidencePreview {
+  count: number;
+  summaries: string[];
+}
+
+// A dry run of the corpus reader: how many evidence items this text yields,
+// and the first few, before any session exists. Text known to yield nothing
+// is a refusal here, which is what lets the page keep Start disabled.
+export async function previewEvidence(
+  text: string,
+  format: "yaml" | "markdown",
+  timeoutMs: number = START_TIMEOUT_MS,
+): Promise<EvidencePreview> {
+  let response: Response;
+  try {
+    response = await fetch("/api/preview-evidence", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ evidence_text: text, evidence_format: format }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (cause) {
+    throw new Error(describeTransportFailure(cause));
+  }
+  const payload = (await response.json().catch(() => null)) as {
+    count?: unknown;
+    summaries?: unknown;
+    error?: { category?: unknown; message?: unknown };
+  } | null;
+  if (!response.ok) {
+    const sent = payload?.error?.message;
+    throw new EvidenceRefusal(
+      typeof payload?.error?.category === "string" ? payload.error.category : "unknown",
+      typeof sent === "string"
+        ? sent
+        : `the server answered with status ${response.status} instead of reading the evidence`,
+    );
+  }
+  if (typeof payload?.count !== "number") {
+    throw new Error("the server answered without a count; try again in a moment");
+  }
+  return {
+    count: payload.count,
+    summaries: Array.isArray(payload.summaries) ? payload.summaries.map(String) : [],
+  };
+}
+
+// The server read the text and refused it: a category the page can act on,
+// and the sentence to show.
+export class EvidenceRefusal extends Error {
+  readonly category: string;
+
+  constructor(category: string, message: string) {
+    super(message);
+    this.category = category;
+  }
+}
+
 export function encodeBase64(bytes: Uint8Array): string {
   let binary = "";
   const chunk = 0x8000; // keeps the spread below the argument limit

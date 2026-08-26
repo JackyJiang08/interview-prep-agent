@@ -7,7 +7,15 @@ import {
   type FormEvent,
 } from "react";
 
-import { createSession, extractResume, fetchDemos, type CreateSessionBody } from "../api";
+import {
+  createSession,
+  EvidenceRefusal,
+  extractResume,
+  fetchDemos,
+  previewEvidence,
+  type CreateSessionBody,
+  type EvidencePreview,
+} from "../api";
 import { displayTitle, SAMPLE_DEMO_ID } from "../demos";
 import { disclosureReducer, initialDisclosure, type Section } from "../disclosure";
 import {
@@ -49,6 +57,16 @@ interface Resume {
   text: string;
 }
 
+// What the server made of the resume text, kept current as it changes.
+type EvidenceCheck =
+  | { kind: "none" }
+  | { kind: "checking" }
+  | { kind: "read"; preview: EvidencePreview }
+  | { kind: "empty"; message: string }
+  | { kind: "unchecked"; message: string };
+
+const CHECK_DEBOUNCE_MS = 400;
+
 export function Landing({ onStart }: { onStart: (sessionId: string) => void }) {
   const [demos, setDemos] = useState<Demo[] | null>(null);
   const [wake, dispatchWake] = useReducer(wakeReducer, initialWakeState);
@@ -61,6 +79,7 @@ export function Landing({ onStart }: { onStart: (sessionId: string) => void }) {
   const [resume, setResume] = useState<Resume>({ filename: null, text: "" });
   const [override, setOverride] = useState<EvidenceFormat | null>(null);
   const [apiKey, setApiKey] = useState("");
+  const [check, setCheck] = useState<EvidenceCheck>({ kind: "none" });
 
   // Advanced options ride along with every run, including the demos, so a
   // visitor who wrote research notes sees them used.
@@ -146,6 +165,41 @@ export function Landing({ onStart }: { onStart: (sessionId: string) => void }) {
   const toggle = (section: Section) => dispatchOpen({ kind: "toggle", section });
   const detected = detectEvidenceFormat(resume.text);
   const format = override ?? detected;
+
+  // Every change to the resume text is read the way a run would read it,
+  // after a short pause in typing. Text the server could not read keeps
+  // Start disabled; a check that never reached the server does not.
+  useEffect(() => {
+    if (resume.text.trim() === "") {
+      setCheck({ kind: "none" });
+      return;
+    }
+    let cancelled = false;
+    setCheck({ kind: "checking" });
+    const timer = window.setTimeout(() => {
+      previewEvidence(resume.text, format)
+        .then((preview) => {
+          if (!cancelled) setCheck({ kind: "read", preview });
+        })
+        .catch((cause: unknown) => {
+          if (cancelled) return;
+          if (cause instanceof EvidenceRefusal) {
+            setCheck({ kind: "empty", message: cause.message });
+          } else {
+            setCheck({
+              kind: "unchecked",
+              message: cause instanceof Error ? cause.message : "the resume could not be checked",
+            });
+          }
+        });
+    }, CHECK_DEBOUNCE_MS);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [resume.text, format]);
+
+  const evidenceKnownBad = check.kind === "empty" || check.kind === "checking";
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -233,6 +287,7 @@ export function Landing({ onStart }: { onStart: (sessionId: string) => void }) {
             }}
             onOverride={() => setOverride(format === "yaml" ? "markdown" : "yaml")}
             onRefusal={(message) => refuse("own", message)}
+            check={check}
           />
 
           <label>
@@ -250,7 +305,11 @@ export function Landing({ onStart }: { onStart: (sessionId: string) => void }) {
             never stored in this browser, and dropped with the session on the
             server.
           </p>
-          <button className="primary" type="submit" disabled={busy || !ready}>
+          <button
+            className="primary"
+            type="submit"
+            disabled={busy || !ready || evidenceKnownBad}
+          >
             Start
           </button>
           {noticeAt("own")}
@@ -400,6 +459,7 @@ function ResumeDropZone({
   onLoaded,
   onOverride,
   onRefusal,
+  check,
 }: {
   resume: Resume;
   format: EvidenceFormat;
@@ -408,6 +468,7 @@ function ResumeDropZone({
   onLoaded: (resume: Resume) => void;
   onOverride: () => void;
   onRefusal: (message: string) => void;
+  check: EvidenceCheck;
 }) {
   const [dragging, setDragging] = useState(false);
   const [reading, setReading] = useState<string | null>(null);
@@ -492,6 +553,7 @@ function ResumeDropZone({
           event.target.value = "";
         }}
       />
+      <EvidenceCheckLine check={check} />
       <button
         type="button"
         className="disclosure preview-toggle"
@@ -514,6 +576,53 @@ function ResumeDropZone({
       )}
     </div>
   );
+}
+
+// What the server read from the resume, shown at the field it describes.
+function EvidenceCheckLine({ check }: { check: EvidenceCheck }) {
+  switch (check.kind) {
+    case "none":
+      return null;
+    case "checking":
+      return (
+        <p className="empty-note check-line" role="status">
+          Reading your resume
+        </p>
+      );
+    case "read": {
+      const { count, summaries } = check.preview;
+      return (
+        <div className="check-line" role="status">
+          <p className="empty-note">
+            Read {count} evidence item{count === 1 ? "" : "s"} from your resume.
+          </p>
+          {summaries.length > 0 && (
+            <ul className="check-summaries">
+              {summaries.map((summary, index) => (
+                <li key={index}>{summary}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      );
+    }
+    case "empty":
+      return (
+        <div className="check-line" role="alert">
+          <p className="error-line">Nothing usable was read from your resume: {check.message}.</p>
+          <p className="empty-note">
+            Open the text box below and check what was read. Each bullet or
+            paragraph describing something you did becomes one item.
+          </p>
+        </div>
+      );
+    case "unchecked":
+      return (
+        <p className="empty-note check-line" role="status">
+          Could not check the resume yet: {check.message}. The run will still read it.
+        </p>
+      );
+  }
 }
 
 function BoundedTextInput({

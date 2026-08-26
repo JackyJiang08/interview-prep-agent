@@ -1,0 +1,24 @@
+Jordan Example
+Data Analyst
+jordan.example@example.org
+EXPERIENCE
+Data Analyst, Example Co. 2022 to present
+Owned funnel analysis for a subscription product, writing SQL against a
+warehouse of roughly forty million events and modelling results in Python.
+Reduced a weekly reporting cycle from two days to under an hour by
+replacing hand-built spreadsheets with a scheduled pipeline.
+Designed and read out four A/B tests on the onboarding flow. Two shipped;
+one was stopped early after the guardrail metric moved the wrong way.
+Page 1 of 2
+Jordan Example - Resume
+Analytics Intern, Sample Labs Summer 2021
+Built the first version of the team's churn dashboard, joining billing
+events to product usage. Presented findings to the head of product every
+fortnight.
+EDUCATION
+B.S. in Statistics, State University, 2022. Coursework in experimental
+design, regression, and databases.
+SKILLS
+SQL, Python, pandas, Airflow, dbt. Working knowledge of causal inference
+methods.
+Page 2 of 2

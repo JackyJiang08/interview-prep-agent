@@ -261,6 +261,12 @@ def test_wrapped_bullet_lines_join_into_one_item():
     assert items[0].summary == "Led analysis across forty million events"
 
 
+def test_prose_without_bullets_is_still_evidence():
+    items = parse_evidence_markdown("# Just a title\n\nProse with no bullets at all.\n")
+    assert [item.summary for item in items] == ["Prose with no bullets at all."]
+    assert items[0].source == "Just a title"
+
+
 def test_an_empty_resume_is_rejected():
-    with pytest.raises(CorpusError, match="no bullet lines"):
-        parse_evidence_markdown("# Just a title\n\nProse with no bullets.\n")
+    with pytest.raises(CorpusError, match="no readable content"):
+        parse_evidence_markdown("# Just a title\n\nPage 1 of 1\n---\n")

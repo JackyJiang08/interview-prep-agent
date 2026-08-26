@@ -4,7 +4,9 @@ import {
   createSession,
   describeTransportFailure,
   encodeBase64,
+  EvidenceRefusal,
   extractResume,
+  previewEvidence,
   streamUrl,
 } from "./api";
 
@@ -144,5 +146,58 @@ describe("pdf extraction", () => {
     expect(encodeBase64(new Uint8Array([104, 105]))).toBe("aGk=");
     const long = new Uint8Array(0x8000 + 3).fill(65);
     expect(atob(encodeBase64(long)).length).toBe(0x8000 + 3);
+  });
+});
+
+describe("evidence preview", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("returns the count and the first summaries", async () => {
+    const calls: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: RequestInit) => {
+        calls.push(JSON.parse(String(init.body)));
+        return new Response(JSON.stringify({ count: 14, summaries: ["a", "b", "c"] }), {
+          status: 200,
+        });
+      }),
+    );
+    expect(await previewEvidence("## Work\n- a\n", "markdown")).toEqual({
+      count: 14,
+      summaries: ["a", "b", "c"],
+    });
+    expect(calls[0]).toEqual({ evidence_text: "## Work\n- a\n", evidence_format: "markdown" });
+  });
+
+  it("surfaces an empty read as a refusal with its category, so Start can stay disabled", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              error: { category: "empty_evidence", message: "the resume contains no readable content" },
+            }),
+            { status: 422 },
+          ),
+      ),
+    );
+    const failure = await previewEvidence("Page 1 of 1", "markdown").catch((cause) => cause);
+    expect(failure).toBeInstanceOf(EvidenceRefusal);
+    expect(failure.category).toBe("empty_evidence");
+    expect(failure.message).toContain("no readable content");
+  });
+
+  it("turns a dropped connection into a plain error that is not a refusal", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("fetch failed");
+      }),
+    );
+    const failure = await previewEvidence("x", "markdown").catch((cause) => cause);
+    expect(failure).not.toBeInstanceOf(EvidenceRefusal);
+    expect(failure.message).toContain("never reached the server");
   });
 });

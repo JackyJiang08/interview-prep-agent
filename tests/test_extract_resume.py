@@ -64,7 +64,7 @@ def test_the_extracted_text_is_a_resume_the_corpus_reader_accepts():
     assert [item.id for item in items] == ["EV-001", "EV-002", "EV-003", "EV-004"]
     assert items[0].summary.startswith("Owned funnel analysis")
     assert items[0].summary.endswith("40 million events.")  # the wrapped line rejoined
-    assert items[0].source == "EXPERIENCE"
+    assert items[0].source == "EXPERIENCE / Data Analyst, Example Co. (2022 - present)"
     assert items[2].source == "Skills"
 
 
