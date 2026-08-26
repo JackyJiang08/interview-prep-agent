@@ -1,20 +1,41 @@
-import { useEffect, useState } from "react";
+import { useEffect, useReducer, useState } from "react";
 
 import { createSession, fetchDemos, type CreateSessionBody } from "../api";
 import type { Demo } from "../types";
+import {
+  FETCH_TIMEOUT_MS,
+  initialWakeState,
+  retryDelayMs,
+  wakeReducer,
+} from "../wake";
 
 export function Landing({ onStart }: { onStart: (sessionId: string) => void }) {
   const [demos, setDemos] = useState<Demo[] | null>(null);
+  const [wake, dispatchWake] = useReducer(wakeReducer, initialWakeState);
   const [ownKey, setOwnKey] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [researchText, setResearchText] = useState("");
 
   useEffect(() => {
-    fetchDemos()
-      .then(setDemos)
-      .catch(() => setError("could not load the demo list; is the server running?"));
-  }, []);
+    if (wake.phase === "ready") return;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      fetchDemos(FETCH_TIMEOUT_MS)
+        .then((list) => {
+          if (cancelled) return;
+          setDemos(list);
+          dispatchWake({ kind: "loaded" });
+        })
+        .catch(() => {
+          if (!cancelled) dispatchWake({ kind: "attempt_failed" });
+        });
+    }, retryDelayMs(wake.attempt));
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [wake]);
 
   const start = async (body: CreateSessionBody) => {
     setBusy(true);
@@ -37,6 +58,12 @@ export function Landing({ onStart }: { onStart: (sessionId: string) => void }) {
           verdict is deterministic. You answer the questions; the admission
           gates decide.
         </p>
+        {wake.phase === "waking" && (
+          <p className="empty-note" role="status">
+            Starting the server — this demo sleeps when idle and takes a few
+            seconds to wake.
+          </p>
+        )}
         {error !== null && <p className="error-line">{error}</p>}
         <div className="landing-grid">
           {(demos ?? []).map((demo) => (

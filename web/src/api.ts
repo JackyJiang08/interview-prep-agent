@@ -12,8 +12,12 @@ export interface CreateSessionBody {
   tavily_api_key?: string;
 }
 
-export async function fetchDemos(): Promise<Demo[]> {
-  const response = await fetch("/api/demos");
+export async function fetchDemos(timeoutMs?: number): Promise<Demo[]> {
+  // The timeout is what turns a sleeping server into a retry rather than a
+  // request that hangs as long as the browser allows.
+  const response = await fetch("/api/demos", {
+    signal: timeoutMs === undefined ? null : AbortSignal.timeout(timeoutMs),
+  });
   if (!response.ok) throw new Error("could not load the demo list");
   const payload = (await response.json()) as { demos: Demo[] };
   return payload.demos;
