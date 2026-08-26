@@ -19,6 +19,13 @@ import {
   type BoundedField,
   type EvidenceFormat,
 } from "../inputs";
+import {
+  idleStart,
+  SLOW_START_MS,
+  startReducer,
+  visibleLine,
+  type StartWhere,
+} from "../start";
 import type { Demo } from "../types";
 import {
   FETCH_TIMEOUT_MS,
@@ -29,18 +36,12 @@ import {
 
 type Provider = "gemini" | "azure";
 
-// A refusal is shown next to the action that produced it, never elsewhere.
-interface Notice {
-  where: "sample" | "own" | "demos";
-  message: string;
-}
-
 export function Landing({ onStart }: { onStart: (sessionId: string) => void }) {
   const [demos, setDemos] = useState<Demo[] | null>(null);
   const [wake, dispatchWake] = useReducer(wakeReducer, initialWakeState);
   const [open, dispatchOpen] = useReducer(disclosureReducer, initialDisclosure);
-  const [error, setError] = useState<Notice | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [starting, dispatchStart] = useReducer(startReducer, idleStart);
+  const busy = starting.phase === "starting";
 
   // Advanced options ride along with every run, including the demos, so a
   // visitor who wrote research notes sees them used.
@@ -71,28 +72,56 @@ export function Landing({ onStart }: { onStart: (sessionId: string) => void }) {
     };
   }, [wake]);
 
-  const start = async (where: Notice["where"], body: CreateSessionBody) => {
-    setBusy(true);
-    setError(null);
+  // Past a warm server's answer time, the wait is named as a wake.
+  useEffect(() => {
+    if (starting.phase !== "starting" || starting.slow) return;
+    const timer = window.setTimeout(
+      () => dispatchStart({ kind: "still_waiting" }),
+      SLOW_START_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [starting]);
+
+  const start = async (where: StartWhere, body: CreateSessionBody) => {
+    dispatchStart({ kind: "clicked", where });
     try {
       onStart(await createSession(body));
     } catch (cause) {
-      const message =
-        cause instanceof Error ? cause.message : "the session could not be started";
-      setError({ where, message });
-      setBusy(false);
+      dispatchStart({
+        kind: "failed",
+        message: cause instanceof Error ? cause.message : "the session could not be started",
+      });
     }
   };
 
-  const runDemo = (where: Notice["where"], demoId: string) =>
+  const runDemo = (where: StartWhere, demoId: string) =>
     start(where, { mode: "demo", demo_id: demoId, research_text: researchText });
 
-  const noticeAt = (where: Notice["where"]) =>
-    error !== null && error.where === where ? (
+  // A refusal the page itself makes, before any request, reads like a failed
+  // start: it followed a click, so it is shown where the click happened.
+  const refuse = (where: StartWhere, message: string | null) => {
+    if (message === null) {
+      dispatchStart({ kind: "dismissed" });
+      return;
+    }
+    dispatchStart({ kind: "clicked", where });
+    dispatchStart({ kind: "failed", message });
+  };
+
+  // The one line for the action at this spot, or nothing when idle there.
+  const noticeAt = (where: StartWhere) => {
+    if (starting.phase === "idle" || starting.where !== where) return null;
+    const line = visibleLine(starting);
+    return starting.phase === "failed" ? (
       <p className="error-line" role="alert">
-        {error.message}
+        {line}
       </p>
-    ) : null;
+    ) : (
+      <p className="empty-note" role="status">
+        {line}
+      </p>
+    );
+  };
 
   const ready = wake.phase === "ready";
   const toggle = (section: Section) => dispatchOpen({ kind: "toggle", section });
@@ -134,9 +163,7 @@ export function Landing({ onStart }: { onStart: (sessionId: string) => void }) {
             azure_endpoint: azureEndpoint || undefined,
             azure_deployment: azureDeployment || undefined,
           }}
-          onRefusal={(message) =>
-            setError(message === null ? null : { where: "own", message })
-          }
+          onRefusal={(message) => refuse("own", message)}
           onSubmit={(body) => start("own", body)}
         />
         {noticeAt("own")}
