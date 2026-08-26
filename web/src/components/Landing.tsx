@@ -4,17 +4,17 @@ import {
   useRef,
   useState,
   type DragEvent,
-  type ReactNode,
+  type FormEvent,
 } from "react";
 
 import { createSession, fetchDemos, type CreateSessionBody } from "../api";
-import { displayTitle, SAMPLE_DEMO_ID, SAMPLE_DISPLAY_NAME } from "../demos";
+import { displayTitle, SAMPLE_DEMO_ID } from "../demos";
 import { disclosureReducer, initialDisclosure, type Section } from "../disclosure";
 import {
+  describeKind,
   detectEvidenceFormat,
   EVIDENCE_EXTENSIONS,
   overCeiling,
-  POSTING_EXTENSIONS,
   readTextFile,
   type BoundedField,
   type EvidenceFormat,
@@ -36,12 +36,29 @@ import {
 
 type Provider = "gemini" | "azure";
 
+const KEY_LABELS: Record<Provider, string> = {
+  gemini: "Gemini API key",
+  azure: "Azure OpenAI API key",
+};
+
+// A loaded resume: where it came from, and the text that will be used.
+interface Resume {
+  filename: string | null;
+  text: string;
+}
+
 export function Landing({ onStart }: { onStart: (sessionId: string) => void }) {
   const [demos, setDemos] = useState<Demo[] | null>(null);
   const [wake, dispatchWake] = useReducer(wakeReducer, initialWakeState);
   const [open, dispatchOpen] = useReducer(disclosureReducer, initialDisclosure);
   const [starting, dispatchStart] = useReducer(startReducer, idleStart);
   const busy = starting.phase === "starting";
+
+  // The form.
+  const [jdText, setJdText] = useState("");
+  const [resume, setResume] = useState<Resume>({ filename: null, text: "" });
+  const [override, setOverride] = useState<EvidenceFormat | null>(null);
+  const [apiKey, setApiKey] = useState("");
 
   // Advanced options ride along with every run, including the demos, so a
   // visitor who wrote research notes sees them used.
@@ -125,48 +142,114 @@ export function Landing({ onStart }: { onStart: (sessionId: string) => void }) {
 
   const ready = wake.phase === "ready";
   const toggle = (section: Section) => dispatchOpen({ kind: "toggle", section });
+  const detected = detectEvidenceFormat(resume.text);
+  const format = override ?? detected;
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    if (resume.text.trim() === "") {
+      refuse("own", "add your resume first - drop a file, or open the text box and paste it");
+      return;
+    }
+    const refusal =
+      overCeiling("jd_text", jdText.length) ??
+      overCeiling("evidence_text", resume.text.length) ??
+      overCeiling("round_text", roundText.length) ??
+      overCeiling("research_text", researchText.length);
+    if (refusal !== null) {
+      refuse("own", refusal);
+      return;
+    }
+    void start("own", {
+      mode: "live",
+      jd_text: jdText,
+      evidence_text: resume.text,
+      evidence_format: format,
+      provider,
+      ...(provider === "gemini" ? { gemini_api_key: apiKey } : { azure_api_key: apiKey }),
+      round_text: roundText,
+      research_text: researchText,
+      tavily_api_key: searchKey || undefined,
+      azure_endpoint: azureEndpoint || undefined,
+      azure_deployment: azureDeployment || undefined,
+    });
+  };
 
   return (
     <div className="landing">
-      <section className="hero" aria-label="Sample run">
-        <p className="hero-name">{SAMPLE_DISPLAY_NAME}</p>
-        <button
-          className="primary hero-action"
-          type="button"
-          disabled={busy || !ready}
-          onClick={() => runDemo("sample", SAMPLE_DEMO_ID)}
-        >
-          Run the sample
-        </button>
-        <p className="empty-note">
-          No key needed. You answer three questions about your experience; the
-          gates decide what counts.
-        </p>
-        {wake.phase === "waking" && (
-          <p className="empty-note" role="status">
-            Starting the server — this demo sleeps when idle and takes a few
-            seconds to wake.
+      <section className="card" aria-label="Prepare for a posting">
+        <h2>Prepare for a posting</h2>
+        <form onSubmit={submit}>
+          <p className="empty-note sample-line">
+            No key?{" "}
+            <button
+              type="button"
+              className="plain"
+              disabled={busy || !ready}
+              onClick={() => runDemo("sample", SAMPLE_DEMO_ID)}
+            >
+              Run the sample
+            </button>{" "}
+            - a data analyst posting. You answer three questions; the gates decide
+            what counts.
           </p>
-        )}
-        {noticeAt("sample")}
-      </section>
+          {wake.phase === "waking" && (
+            <p className="empty-note" role="status">
+              Starting the server — this demo sleeps when idle and takes a few
+              seconds to wake.
+            </p>
+          )}
+          {noticeAt("sample")}
 
-      <section className="own-posting" aria-label="Use your own posting">
-        <h2>Use your own posting</h2>
-        <OwnPostingForm
-          busy={busy || !ready}
-          provider={provider}
-          advanced={{
-            round_text: roundText,
-            research_text: researchText,
-            tavily_api_key: searchKey || undefined,
-            azure_endpoint: azureEndpoint || undefined,
-            azure_deployment: azureDeployment || undefined,
-          }}
-          onRefusal={(message) => refuse("own", message)}
-          onSubmit={(body) => start("own", body)}
-        />
-        {noticeAt("own")}
+          <label>
+            Job posting
+            <textarea
+              rows={7}
+              value={jdText}
+              placeholder="Paste the posting here"
+              required
+              onChange={(event) => {
+                setJdText(event.target.value);
+                refuse("own", null);
+              }}
+            />
+          </label>
+
+          <ResumeDropZone
+            resume={resume}
+            format={format}
+            previewOpen={open.preview}
+            onTogglePreview={() => toggle("preview")}
+            onLoaded={(loaded) => {
+              setResume(loaded);
+              setOverride(null);
+              refuse("own", null);
+            }}
+            onOverride={() => setOverride(format === "yaml" ? "markdown" : "yaml")}
+            onRefusal={(message) => refuse("own", message)}
+          />
+
+          <label>
+            {KEY_LABELS[provider]}
+            <input
+              type="password"
+              value={apiKey}
+              onChange={(event) => setApiKey(event.target.value)}
+              autoComplete="off"
+              required
+            />
+          </label>
+          <p className="key-notice">
+            Keys are held in this page's memory, sent once to create the session,
+            never stored in this browser, and dropped with the session on the
+            server.
+          </p>
+          <button className="primary" type="submit" disabled={busy || !ready}>
+            Start
+          </button>
+          {noticeAt("own")}
+        </form>
+
         <button
           type="button"
           className="disclosure"
@@ -290,196 +373,111 @@ export function Landing({ onStart }: { onStart: (sessionId: string) => void }) {
   );
 }
 
-function OwnPostingForm({
-  busy,
-  provider,
-  advanced,
+// The resume comes in as a file - dropped or browsed - and is read in the
+// browser; only its text ever leaves, through the same request a paste would
+// make. What was read is shown in a collapsed text box the visitor can open,
+// correct, or simply paste into when there is no file.
+function ResumeDropZone({
+  resume,
+  format,
+  previewOpen,
+  onTogglePreview,
+  onLoaded,
+  onOverride,
   onRefusal,
-  onSubmit,
 }: {
-  busy: boolean;
-  provider: Provider;
-  advanced: Pick<
-    CreateSessionBody,
-    "round_text" | "research_text" | "tavily_api_key" | "azure_endpoint" | "azure_deployment"
-  >;
-  onRefusal: (message: string | null) => void;
-  onSubmit: (body: CreateSessionBody) => void;
-}) {
-  const [jdText, setJdText] = useState("");
-  const [evidenceText, setEvidenceText] = useState("");
-  const [override, setOverride] = useState<EvidenceFormat | null>(null);
-  const [apiKey, setApiKey] = useState("");
-
-  const detected = detectEvidenceFormat(evidenceText);
-  const format = override ?? detected;
-
-  const submit = () => {
-    const refusal =
-      overCeiling("jd_text", jdText.length) ??
-      overCeiling("evidence_text", evidenceText.length) ??
-      overCeiling("round_text", (advanced.round_text ?? "").length) ??
-      overCeiling("research_text", (advanced.research_text ?? "").length);
-    if (refusal !== null) {
-      onRefusal(refusal);
-      return;
-    }
-    onRefusal(null);
-    onSubmit({
-      mode: "live",
-      jd_text: jdText,
-      evidence_text: evidenceText,
-      evidence_format: format,
-      provider,
-      ...(provider === "gemini" ? { gemini_api_key: apiKey } : { azure_api_key: apiKey }),
-      ...advanced,
-    });
-  };
-
-  return (
-    <form
-      onSubmit={(event) => {
-        event.preventDefault();
-        submit();
-      }}
-    >
-      <DropTextarea
-        label="Job posting"
-        hint={`Paste the posting, or drop a ${POSTING_EXTENSIONS.join(" or ")} file here`}
-        field="jd_text"
-        extensions={POSTING_EXTENSIONS}
-        rows={7}
-        value={jdText}
-        onChange={(text) => {
-          setJdText(text);
-          onRefusal(null);
-        }}
-        onRefusal={onRefusal}
-      />
-      <DropTextarea
-        label="Your resume or evidence"
-        hint="Paste a resume in markdown, or drop a .md or .yaml file here"
-        field="evidence_text"
-        extensions={EVIDENCE_EXTENSIONS}
-        rows={7}
-        value={evidenceText}
-        onChange={(text) => {
-          setEvidenceText(text);
-          setOverride(null);
-          onRefusal(null);
-        }}
-        onRefusal={onRefusal}
-        footer={
-          evidenceText.trim() !== "" && (
-            <span className="format-label">
-              Read as {format === "yaml" ? "a structured evidence list" : "a resume"}
-              {" · "}
-              <button
-                type="button"
-                className="plain"
-                onClick={() => setOverride(format === "yaml" ? "markdown" : "yaml")}
-              >
-                read as {format === "yaml" ? "a resume" : "a structured evidence list"} instead
-              </button>
-            </span>
-          )
-        }
-      />
-      <label>
-        {provider === "gemini" ? "Gemini API key" : "Azure OpenAI API key"}
-        <input
-          type="password"
-          value={apiKey}
-          onChange={(event) => setApiKey(event.target.value)}
-          autoComplete="off"
-          required
-        />
-      </label>
-      <p className="key-notice">
-        Keys are held in this page's memory, sent once to create the session,
-        never stored in this browser, and dropped with the session on the
-        server.
-      </p>
-      <button className="primary" type="submit" disabled={busy}>
-        Start with my posting
-      </button>
-    </form>
-  );
-}
-
-// A textarea that also takes a dropped or picked file. The file is read in
-// the browser; only its text ever leaves, through the same request a paste
-// would make.
-function DropTextarea({
-  label,
-  hint,
-  field,
-  extensions,
-  rows,
-  value,
-  onChange,
-  onRefusal,
-  footer,
-}: {
-  label: string;
-  hint: string;
-  field: BoundedField;
-  extensions: string[];
-  rows: number;
-  value: string;
-  onChange: (text: string) => void;
+  resume: Resume;
+  format: EvidenceFormat;
+  previewOpen: boolean;
+  onTogglePreview: () => void;
+  onLoaded: (resume: Resume) => void;
+  onOverride: () => void;
   onRefusal: (message: string) => void;
-  footer?: ReactNode;
 }) {
   const [dragging, setDragging] = useState(false);
   const picker = useRef<HTMLInputElement | null>(null);
 
   const take = async (file: File | undefined) => {
     if (file === undefined) return;
-    const result = await readTextFile(file, extensions, field);
+    const result = await readTextFile(file, EVIDENCE_EXTENSIONS, "evidence_text");
     if ("refusal" in result) onRefusal(result.refusal);
-    else onChange(result.text);
+    else onLoaded({ filename: file.name, text: result.text });
   };
 
-  const onDrop = (event: DragEvent<HTMLTextAreaElement>) => {
+  const onDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setDragging(false);
     void take(event.dataTransfer.files[0]);
   };
 
+  const loaded = resume.filename !== null;
+  const other = format === "yaml" ? "markdown" : "yaml";
+  const browse = (
+    <button type="button" className="plain" onClick={() => picker.current?.click()}>
+      browse
+    </button>
+  );
+
   return (
-    <label className={dragging ? "drop-target dragging" : "drop-target"}>
-      <span className="field-head">
-        {label}
-        <button type="button" className="plain" onClick={() => picker.current?.click()}>
-          pick a file
-        </button>
-      </span>
-      <textarea
-        rows={rows}
-        value={value}
-        placeholder={hint}
-        required
-        onChange={(event) => onChange(event.target.value)}
+    <div className="resume-field">
+      <span className="field-label">Resume</span>
+      <div
+        className={dragging ? "drop-zone dragging" : "drop-zone"}
         onDragOver={(event) => {
           event.preventDefault();
           setDragging(true);
         }}
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
-      />
+      >
+        {loaded ? (
+          <>
+            <span>
+              <span className="file-name">{resume.filename}</span>
+              {" - read as "}
+              {describeKind(format)}
+              {" · "}
+              <button type="button" className="plain" onClick={onOverride}>
+                read as {describeKind(other)} instead
+              </button>
+            </span>
+            <span className="drop-again">Drop another file to replace it, or {browse}</span>
+          </>
+        ) : (
+          <span>Drop your resume here - markdown, or YAML evidence · {browse}</span>
+        )}
+      </div>
       <input
         ref={picker}
         type="file"
-        accept={extensions.join(",")}
+        accept={EVIDENCE_EXTENSIONS.join(",")}
         hidden
         onChange={(event) => {
           void take(event.target.files?.[0]);
           event.target.value = "";
         }}
       />
-      {footer}
-    </label>
+      <button
+        type="button"
+        className="disclosure preview-toggle"
+        aria-expanded={previewOpen}
+        onClick={onTogglePreview}
+      >
+        {loaded ? "The text that will be used" : "No file? Paste your resume instead"}
+      </button>
+      {previewOpen && (
+        <label className="preview">
+          {loaded
+            ? "Correct anything that was read wrongly; this text is what the run sees."
+            : "Paste your resume as plain text or markdown, or a YAML evidence list."}
+          <textarea
+            rows={10}
+            value={resume.text}
+            onChange={(event) => onLoaded({ filename: resume.filename, text: event.target.value })}
+          />
+        </label>
+      )}
+    </div>
   );
 }
 

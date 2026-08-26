@@ -48,12 +48,10 @@ h3 { font-size: 16px; margin: 0 0 6px; }
 
 .landing { display: grid; gap: 36px; }
 
-.hero { display: grid; gap: 10px; justify-items: start; }
-.hero-name { font-size: 15px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0; }
-.hero-action { font-size: 17px; padding: 12px 26px; }
-
-.own-posting { border-top: 1px solid var(--line); padding-top: 24px; }
-.own-posting form, .advanced { display: grid; gap: 14px; max-width: 640px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 22px 24px 20px; }
+.card h2 { margin-bottom: 14px; }
+.card form, .advanced { display: grid; gap: 14px; max-width: 640px; }
+.sample-line { margin: 0 0 2px; }
 .advanced { margin-top: 14px; padding-left: 14px; border-left: 2px solid var(--line); }
 label { display: grid; gap: 4px; font-size: 14px; color: var(--muted); }
 textarea, input[type="text"], input[type="password"] {
@@ -62,9 +60,18 @@ textarea, input[type="text"], input[type="password"] {
 }
 textarea:focus, input:focus { border-color: var(--accent); outline: none; }
 textarea::placeholder { color: var(--muted); opacity: 0.8; }
-.field-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
-.drop-target.dragging textarea { border-color: var(--accent); background: var(--accent-soft); }
-.format-label { font-size: 13px; color: var(--muted); }
+.resume-field { display: grid; gap: 6px; }
+.field-label { font-size: 14px; color: var(--muted); }
+.drop-zone {
+  display: grid; gap: 6px; justify-items: center; text-align: center;
+  border: 1.5px dashed var(--line); border-radius: 6px; padding: 20px 16px;
+  font-size: 14px; color: var(--muted); background: var(--paper);
+}
+.drop-zone.dragging { border-color: var(--accent); background: var(--accent-soft); }
+.drop-zone .file-name { color: var(--ink); font-weight: 600; word-break: break-all; }
+.drop-zone .drop-again { font-size: 13px; }
+.preview-toggle { margin-top: 0; font-weight: 500; }
+.preview { margin-top: 4px; }
 .key-notice { font-size: 13px; color: var(--muted); margin: 0; }
 .choice-row { display: flex; gap: 16px; font-size: 14px; color: var(--ink); border: none; padding: 0; margin: 0; flex-wrap: wrap; }
 .choice-row legend { padding: 0; margin-bottom: 6px; }
@@ -91,10 +98,9 @@ button.disclosure[aria-expanded="true"]::before { content: "\25BE"; }
 
 @media (max-width: 480px) {
   main { padding: 20px 14px 60px; }
-  .hero-action { width: 100%; }
+  .card { padding: 18px 14px 16px; }
   .demo-row { grid-template-columns: 1fr; }
   .demo-row .primary { justify-self: start; }
-  .field-head { flex-direction: column; align-items: start; gap: 2px; }
 }
 
 button.primary {
@@ -107,6 +113,7 @@ button.plain {
   font: inherit; background: none; border: none; color: var(--accent);
   cursor: pointer; padding: 0; text-decoration: underline;
 }
+button.plain:disabled { opacity: 0.5; cursor: default; text-decoration: none; }
 
 .run-layout { display: grid; grid-template-columns: 300px 1fr; gap: 32px; }
 @media (max-width: 800px) { .run-layout { grid-template-columns: 1fr; } }

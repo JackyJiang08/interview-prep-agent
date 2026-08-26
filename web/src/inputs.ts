@@ -56,7 +56,14 @@ export function detectEvidenceFormat(text: string): EvidenceFormat {
 }
 
 export const POSTING_EXTENSIONS = [".txt", ".md"];
-export const EVIDENCE_EXTENSIONS = [".md", ".yaml", ".yml"];
+export const EVIDENCE_EXTENSIONS = [".md", ".markdown", ".yaml", ".yml"];
+
+// What the page calls a loaded resume: the shape the server will read it
+// as, in the reader's words. The format decides the label; the filename only
+// adds what the format cannot see.
+export function describeKind(format: EvidenceFormat): string {
+  return format === "yaml" ? "a YAML evidence list" : "a resume";
+}
 
 export function acceptedFile(name: string, extensions: string[]): boolean {
   const lower = name.toLowerCase();

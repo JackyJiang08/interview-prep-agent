@@ -1,13 +1,17 @@
-// The landing page's two collapsed sections. Both start closed so a first
-// visitor meets the sample run and the own-posting flow before anything
-// else; opening one never closes the other. The state is a plain value so
+// The landing page's collapsed sections. All start closed so a first
+// visitor meets the form before anything else; opening one never closes
+// another. The state is a plain value so
 // the transitions can be tested without a browser.
 
-export type Section = "advanced" | "demos";
+export type Section = "advanced" | "demos" | "preview";
 
 export type DisclosureState = Record<Section, boolean>;
 
-export const initialDisclosure: DisclosureState = { advanced: false, demos: false };
+export const initialDisclosure: DisclosureState = {
+  advanced: false,
+  demos: false,
+  preview: false,
+};
 
 export type DisclosureAction =
   | { kind: "toggle"; section: Section }

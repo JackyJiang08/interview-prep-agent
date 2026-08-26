@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   acceptedFile,
   describeExtensions,
+  describeKind,
   detectEvidenceFormat,
   EVIDENCE_EXTENSIONS,
   INPUT_CEILINGS,
@@ -69,6 +70,13 @@ describe("evidence format detection", () => {
   });
 });
 
+describe("the kind label", () => {
+  it("names what the server will read, in the reader's words", () => {
+    expect(describeKind("yaml")).toBe("a YAML evidence list");
+    expect(describeKind("markdown")).toBe("a resume");
+  });
+});
+
 describe("input ceilings", () => {
   it("passes text at the ceiling and refuses one character over, in the server's words", () => {
     expect(overCeiling("jd_text", INPUT_CEILINGS.jd_text)).toBeNull();
@@ -84,9 +92,10 @@ describe("file reading", () => {
     expect(acceptedFile("posting.TXT", POSTING_EXTENSIONS)).toBe(true);
     expect(acceptedFile("resume.md", EVIDENCE_EXTENSIONS)).toBe(true);
     expect(acceptedFile("corpus.yml", EVIDENCE_EXTENSIONS)).toBe(true);
+    expect(acceptedFile("RESUME.YAML", EVIDENCE_EXTENSIONS)).toBe(true);
     expect(acceptedFile("resume.pdf", EVIDENCE_EXTENSIONS)).toBe(false);
     expect(describeExtensions(POSTING_EXTENSIONS)).toBe(".txt or .md");
-    expect(describeExtensions(EVIDENCE_EXTENSIONS)).toBe(".md, .yaml or .yml");
+    expect(describeExtensions(EVIDENCE_EXTENSIONS)).toBe(".md, .markdown, .yaml or .yml");
   });
 
   it("returns the text of an accepted file", async () => {
@@ -99,7 +108,9 @@ describe("file reading", () => {
   it("refuses the wrong kind without reading it", async () => {
     const file = new File(["%PDF"], "resume.pdf");
     const result = await readTextFile(file, EVIDENCE_EXTENSIONS, "evidence_text");
-    expect(result).toEqual({ refusal: "that file is not .md, .yaml or .yml; nothing was read" });
+    expect(result).toEqual({
+      refusal: "that file is not .md, .markdown, .yaml or .yml; nothing was read",
+    });
   });
 
   it("refuses an oversized file with the server's ceiling wording", async () => {
