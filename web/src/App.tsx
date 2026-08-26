@@ -106,9 +106,10 @@ function RunScreen({
     <div className="run-layout">
       <StageRail stages={state.stages} phase={state.phase} />
       <section aria-label="Session">
-        {state.resolutions.map((resolution, index) => (
-          <ResolutionCard key={index} resolution={resolution} />
-        ))}
+        {state.prepPackage === null &&
+          state.resolutions.map((resolution, index) => (
+            <ResolutionCard key={index} resolution={resolution} />
+          ))}
         {state.pending !== null && (
           <InterruptCard
             pending={state.pending}
@@ -153,13 +154,9 @@ function RunScreen({
             </button>
           </div>
         )}
-        {state.phase === "completed" && (
+        {state.phase === "completed" && state.prepPackage === null && (
           <div className="terminal-card">
-            <p className="stop">
-              {state.stopReason === "valid_package_complete"
-                ? "Run complete. The package passed every gate."
-                : `Run ended: ${state.stopReason ?? "no stop reason"}`}
-            </p>
+            <p className="stop">Run ended: {state.stopReason ?? "no stop reason"}</p>
             <button className="primary" type="button" onClick={onReset}>
               Start another session
             </button>
@@ -171,7 +168,19 @@ function RunScreen({
             evidence={state.evidence}
             research={state.research}
             resolutions={state.resolutions}
+            verdict={
+              state.stopReason === "valid_package_complete"
+                ? "Run complete. The package passed every gate."
+                : `Run ended: ${state.stopReason ?? "no stop reason"}`
+            }
           />
+        )}
+        {state.phase === "completed" && state.prepPackage !== null && (
+          <div className="no-print after-package">
+            <button className="primary" type="button" onClick={onReset}>
+              Start another session
+            </button>
+          </div>
         )}
       </section>
     </div>

@@ -190,6 +190,20 @@ button.plain:disabled { opacity: 0.5; cursor: default; text-decoration: none; }
 .coverage.partial { color: var(--reject-line); }
 .coverage.gap { color: var(--ink); }
 
+.package-nav { display: flex; gap: 18px; flex-wrap: wrap; font-size: 14px; margin-bottom: 20px; }
+.package-nav a { color: var(--accent); text-decoration: none; }
+.package-nav a:hover { text-decoration: underline; }
+.overview { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 18px 20px; }
+.overview p { margin: 0 0 8px; }
+.verdict-line { font-weight: 600; }
+.overview .export-actions { margin: 12px 0 0; }
+.audit summary { cursor: pointer; list-style: none; display: grid; gap: 2px; }
+.audit summary::-webkit-details-marker { display: none; }
+.audit summary h2 { margin: 0; }
+.audit summary h2::before { content: "\25B8"; display: inline-block; width: 16px; }
+.audit[open] summary h2::before { content: "\25BE"; }
+.audit[open] summary { margin-bottom: 14px; }
+.after-package { margin-top: 8px; }
 .package-section { margin-bottom: 34px; }
 .package-section table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
 .package-section th { text-align: left; color: var(--muted); font-weight: 500; font-size: 13px; border-bottom: 1px solid var(--line); padding: 6px 10px 6px 0; }
@@ -219,6 +233,9 @@ button.plain:disabled { opacity: 0.5; cursor: default; text-decoration: none; }
   main { max-width: none; padding: 0; }
   body { background: #fff; color: #000; font-size: 11pt; }
   .package-section { break-inside: avoid; margin-bottom: 18pt; }
+  .package-nav { display: none; }
+  .overview { border: none; padding: 0; }
+  .audit summary h2::before { content: ""; }
   .qa { break-inside: avoid; border: none; padding: 0 0 8pt; }
   .chip { border: none; background: none; padding: 0; color: #000; }
   a { color: #000; text-decoration: none; }

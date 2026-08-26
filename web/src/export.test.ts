@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { coverageCounts, packageMarkdown, questionsMarkdown } from "./export";
+import { coverageCounts, overview, packageMarkdown, questionsMarkdown } from "./export";
 import type { PrepPackage } from "./types";
 
 const PACKAGE: PrepPackage = {
@@ -99,5 +99,25 @@ describe("markdown export", () => {
     expect(coverageCounts(PACKAGE)).toEqual({ FULL: 1, PARTIAL: 0, GAP: 1 });
     const missing = { ...PACKAGE, matches: [{ ...PACKAGE.matches[1], coverage: null }] };
     expect(coverageCounts(missing).GAP).toBe(1);
+  });
+});
+
+describe("the overview", () => {
+  it("counts coverage, questions asked, admissions and skips", () => {
+    const resolutions = [
+      { requirementId: "REQ-002", question: "Q", answer: "", accepted: false, acceptedClaim: null, mintedId: null, decisionReason: "skipped" },
+      { requirementId: "REQ-003", question: "Q", answer: "A", accepted: true, acceptedClaim: "C", mintedId: "CL-001", decisionReason: "passed" },
+      { requirementId: "REQ-004", question: "Q", answer: "A", accepted: false, acceptedClaim: null, mintedId: null, decisionReason: "rejected" },
+    ];
+    expect(overview(PACKAGE, resolutions)).toEqual({
+      requirements: 2,
+      covered: 1,
+      partial: 0,
+      gaps: 1,
+      asked: 3,
+      admitted: 1,
+      skipped: 1,
+    });
+    expect(overview(PACKAGE, []).asked).toBe(0);
   });
 });

@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
 import { useRef, useState } from "react";
 
-import { downloadText, packageMarkdown, questionsMarkdown } from "../export";
+import { downloadText, overview, packageMarkdown, questionsMarkdown } from "../export";
 import type { Resolution } from "../reducer";
+import { ResolutionCard } from "./InterruptCard";
 import type {
   EvidenceItem,
   PrepPackage,
@@ -17,11 +18,13 @@ export function PackageView({
   evidence,
   research = [],
   resolutions = [],
+  verdict = "The package passed every gate.",
 }: {
   prepPackage: PrepPackage;
   evidence: EvidenceItem[];
   research?: ResearchFinding[];
   resolutions?: Resolution[];
+  verdict?: string;
 }) {
   const exportPackage = () =>
     downloadText(
@@ -96,20 +99,48 @@ export function PackageView({
     </button>
   );
 
+  const numbers = overview(prepPackage, resolutions);
+
   return (
-    <div aria-label="Preparation package">
-      <div className="export-actions no-print">
-        <button type="button" className="primary" onClick={exportPackage}>
-          Download package (Markdown)
-        </button>
-        <button type="button" className="plain" onClick={exportQuestions}>
-          Download practice questions (Markdown)
-        </button>
-        <button type="button" className="plain" onClick={() => window.print()}>
-          Print or save as PDF
-        </button>
-      </div>
-      <section className="package-section" aria-label="Coverage">
+    <div aria-label="Preparation package" className="package">
+      <nav className="package-nav no-print" aria-label="Package sections">
+        <a href="#overview">Overview</a>
+        <a href="#coverage">Coverage</a>
+        <a href="#strategy">Strategy</a>
+        <a href="#questions">Practice questions</a>
+        <a href="#audit">Q&amp;A audit</a>
+      </nav>
+
+      <section className="package-section overview" id="overview" aria-label="Overview">
+        <h2>Overview</h2>
+        <p className="verdict-line">{verdict}</p>
+        <p>
+          {numbers.requirements} requirements: {numbers.covered} covered,{" "}
+          {numbers.partial} partly covered, {numbers.gaps} open gap
+          {numbers.gaps === 1 ? "" : "s"}.
+          {numbers.asked > 0 && (
+            <>
+              {" "}
+              {numbers.asked} question{numbers.asked === 1 ? "" : "s"} asked,{" "}
+              {numbers.admitted} answer{numbers.admitted === 1 ? "" : "s"} admitted as evidence
+              {numbers.skipped > 0 ? `, ${numbers.skipped} skipped` : ""}.
+            </>
+          )}
+        </p>
+        <div className="export-actions no-print">
+          <button type="button" className="primary" onClick={exportPackage}>
+            Download package (Markdown)
+          </button>
+          <button type="button" className="plain" onClick={exportQuestions}>
+            Download practice questions (Markdown)
+          </button>
+          <button type="button" className="plain" onClick={() => window.print()}>
+            Print or save as PDF
+          </button>
+        </div>
+      </section>
+
+      <section className="package-section" id="coverage" aria-label="Coverage">
         <h2>Requirements and coverage</h2>
         <table>
           <thead>
@@ -182,7 +213,7 @@ export function PackageView({
         </table>
       </section>
 
-      <section className="package-section" aria-label="Strategy">
+      <section className="package-section" id="strategy" aria-label="Strategy">
         <h2>Strategy</h2>
         <p>{withResearchChips(prepPackage.strategy.positioning_statement)}</p>
         {prepPackage.strategy.top_priorities.map((item) => (
@@ -209,7 +240,7 @@ export function PackageView({
         )}
       </section>
 
-      <section className="package-section" aria-label="Practice questions">
+      <section className="package-section" id="questions" aria-label="Practice questions">
         <h2>Practice questions</h2>
         {prepPackage.mock_questions.map((question, index) => (
           <div className="qa" key={index}>
@@ -251,6 +282,22 @@ export function PackageView({
           </p>
         </section>
       )}
+
+      <section className="package-section" id="audit" aria-label="Question and answer audit">
+        <details className="audit">
+          <summary>
+            <h2>Q&amp;A audit</h2>
+            <span className="empty-note">
+              {resolutions.length === 0
+                ? "No questions were asked in this run."
+                : `${resolutions.length} question${resolutions.length === 1 ? "" : "s"}: what was asked, what was answered, and what the gates decided.`}
+            </span>
+          </summary>
+          {resolutions.map((resolution, index) => (
+            <ResolutionCard key={index} resolution={resolution} />
+          ))}
+        </details>
+      </section>
 
       <dialog ref={dialogRef} className="evidence-pop" onClose={close}>
         {openItem !== null && (

@@ -96,6 +96,30 @@ export function coverageCounts(prepPackage: PrepPackage): Record<"FULL" | "PARTI
   return counts;
 }
 
+// The numbers the overview states, from the package and the run's records.
+export interface Overview {
+  requirements: number;
+  covered: number;
+  partial: number;
+  gaps: number;
+  asked: number;
+  admitted: number;
+  skipped: number;
+}
+
+export function overview(prepPackage: PrepPackage, resolutions: Resolution[]): Overview {
+  const counts = coverageCounts(prepPackage);
+  return {
+    requirements: prepPackage.requirements.length,
+    covered: counts.FULL,
+    partial: counts.PARTIAL,
+    gaps: counts.GAP,
+    asked: resolutions.length,
+    admitted: resolutions.filter((item) => item.accepted).length,
+    skipped: resolutions.filter((item) => !item.accepted && item.answer === "").length,
+  };
+}
+
 function citeList(ids: string[]): string {
   return ids.length > 0 ? ids.join(", ") : "no evidence";
 }
