@@ -63,6 +63,31 @@ jobs:
       - name: Container image builds
         run: docker build -t interview-prep-agent:ci .
 
+      # The image must also run: the health probe lists every provider, and
+      # the fixture resume comes back through the PDF endpoint, which is the
+      # one path that needs a native dependency inside the image.
+      - name: Container image serves the API and reads a PDF
+        run: |
+          docker run -d --rm -p 8000:8000 --name ipa interview-prep-agent:ci
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8000/api/health > /dev/null && break
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:8000/api/health | tee /dev/stderr | grep -q '"anthropic"'
+          python - <<'EOF'
+          import base64, json, urllib.request
+          data = base64.b64encode(open("tests/fixtures/resume_synthetic.pdf", "rb").read()).decode()
+          request = urllib.request.Request(
+              "http://127.0.0.1:8000/api/extract-resume",
+              data=json.dumps({"filename": "resume.pdf", "content_base64": data}).encode(),
+              headers={"Content-Type": "application/json"},
+          )
+          body = json.load(urllib.request.urlopen(request))
+          assert "## EXPERIENCE" in body["text"], body
+          print("extracted", body["pages"], "pages,", body["characters"], "characters")
+          EOF
+          docker stop ipa
+
       - name: End-to-end run on the committed example
         run: |
           interview-prep-agent match \
