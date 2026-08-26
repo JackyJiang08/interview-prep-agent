@@ -16,6 +16,43 @@ export type Phase =
 export interface StageEntry {
   node: string;
   summary: string;
+  startedAt: number | null; // wall-clock arrival, for the elapsed display
+}
+
+// Where the run is inside a generation, derived from the server's progress
+// events and the known graph shape: never a percentage, always a stage.
+export interface Progress {
+  stage: string;
+  index: number;
+  total: number;
+  label: string;
+  note: string | null; // one quiet line for the long model stages
+  startedAt: number | null;
+}
+
+const STAGE_LABELS: Record<string, string> = {
+  extract_evidence: "reading your evidence",
+  extract_requirements: "reading the posting for requirements",
+  match: "matching evidence to requirements",
+  assess_gaps: "assessing the gaps",
+  research: "gathering role research",
+  build_strategy: "building the strategy",
+  generate_questions: "writing practice questions",
+  validate_package: "checking the package",
+};
+
+const STAGE_NOTES: Record<string, string> = {
+  build_strategy:
+    "The model is writing your positioning, the stories to prepare, and the risks to address.",
+  generate_questions:
+    "The model is writing practice questions with follow-ups and answer outlines.",
+};
+
+export function describeProgress(stage: string): { label: string; note: string | null } {
+  return {
+    label: STAGE_LABELS[stage] ?? stage.split("_").join(" "),
+    note: STAGE_NOTES[stage] ?? null,
+  };
 }
 
 export interface PendingInterrupt {
@@ -39,6 +76,7 @@ export interface RunState {
   stages: StageEntry[];
   pending: PendingInterrupt | null;
   resolutions: Resolution[];
+  progress: Progress | null;
   prepPackage: PrepPackage | null;
   evidence: EvidenceItem[];
   research: ResearchFinding[];
@@ -51,6 +89,7 @@ export const initialRunState: RunState = {
   stages: [],
   pending: null,
   resolutions: [],
+  progress: null,
   prepPackage: null,
   evidence: [],
   research: [],
@@ -58,8 +97,10 @@ export const initialRunState: RunState = {
   error: null,
 };
 
+// A message may carry the wall-clock time it arrived; the reducer stores it
+// and never reads a clock itself, so every transition stays testable.
 export type RunAction =
-  | { kind: "message"; message: unknown }
+  | { kind: "message"; message: unknown; at?: number }
   | { kind: "answer_submitted"; text: string }
   | { kind: "socket_closed" };
 
@@ -78,17 +119,39 @@ export function runReducer(state: RunState, action: RunAction): RunState {
       if (TERMINAL.includes(state.phase)) return state;
       return { ...state, phase: "disconnected" };
     case "message":
-      return applyMessage(state, action.message);
+      return applyMessage(state, action.message, action.at ?? null);
   }
 }
 
-function applyMessage(state: RunState, raw: unknown): RunState {
+function applyMessage(state: RunState, raw: unknown, at: number | null): RunState {
   if (typeof raw !== "object" || raw === null) return state;
   const message = raw as Record<string, unknown>;
 
   switch (message.type) {
     case "node_update":
-      return applyNodeUpdate(state, message);
+      return applyNodeUpdate(state, message, at);
+    case "progress": {
+      if (
+        typeof message.stage !== "string" ||
+        typeof message.index !== "number" ||
+        typeof message.total !== "number"
+      ) {
+        return state;
+      }
+      const { label, note } = describeProgress(message.stage);
+      return {
+        ...state,
+        phase: state.phase === "connecting" ? "running" : state.phase,
+        progress: {
+          stage: message.stage,
+          index: message.index,
+          total: message.total,
+          label,
+          note,
+          startedAt: at,
+        },
+      };
+    }
     case "interrupt": {
       if (
         typeof message.requirement_id !== "string" ||
@@ -99,6 +162,7 @@ function applyMessage(state: RunState, raw: unknown): RunState {
       return {
         ...state,
         phase: "waiting_for_answer",
+        progress: null,
         pending: {
           requirementId: message.requirement_id,
           question: message.question,
@@ -128,12 +192,14 @@ function applyMessage(state: RunState, raw: unknown): RunState {
         phase: state.error === null ? "completed" : "failed",
         stopReason,
         pending: null,
+        progress: null,
       };
     }
     case "error": {
       return {
         ...state,
         phase: "failed",
+        progress: null,
         error: {
           category: String(message.category ?? "unknown"),
           message: String(message.message ?? "the run failed"),
@@ -148,6 +214,7 @@ function applyMessage(state: RunState, raw: unknown): RunState {
 function applyNodeUpdate(
   state: RunState,
   message: Record<string, unknown>,
+  at: number | null,
 ): RunState {
   const node = typeof message.node === "string" ? message.node : "unknown";
   const delta = (message.delta ?? {}) as Record<string, unknown>;
@@ -156,8 +223,11 @@ function applyNodeUpdate(
   if (node === "assess_and_admit" && typeof delta.record === "object") {
     next = resolvePending(state, delta.record as Record<string, unknown>);
   }
-  const entry: StageEntry = { node, summary: summarize(node, delta) };
-  return { ...next, stages: [...next.stages, entry] };
+  const entry: StageEntry = { node, summary: summarize(node, delta), startedAt: at };
+  // A generation has finished once its node update arrives.
+  const progress =
+    node === "generate_initial" || node === "generate_final" ? null : next.progress;
+  return { ...next, stages: [...next.stages, entry], progress };
 }
 
 function resolvePending(

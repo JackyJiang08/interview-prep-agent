@@ -139,7 +139,27 @@ button.plain:disabled { opacity: 0.5; cursor: default; text-decoration: none; }
 .stage-rail li { font-size: 14px; }
 .stage-rail .stage-name { font-weight: 600; }
 .stage-rail .stage-summary { color: var(--muted); }
-.stage-rail li.current .stage-name::after { content: " - running"; color: var(--accent); font-weight: 400; }
+.stage-rail li.current .stage-name { color: var(--accent); }
+.stage-rail li.current .stage-name::before {
+  content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent); margin-right: 8px; vertical-align: middle;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+.stage-elapsed { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+
+.progress { display: grid; gap: 8px; margin-bottom: 18px; }
+.progress-line { margin: 0; font-size: 14.5px; }
+.progress-line .elapsed { color: var(--muted); font-variant-numeric: tabular-nums; }
+.progress-bar { height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; max-width: 420px; }
+.progress-bar span {
+  display: block; height: 100%; width: 30%; background: var(--accent); border-radius: 2px;
+  animation: slide 1.6s ease-in-out infinite;
+}
+@keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(340%); } }
+@keyframes pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .progress-bar span, .stage-rail li.current .stage-name::before { animation: none; }
+}
 
 .interrupt-card, .resolution-card, .terminal-card {
   background: var(--card); border: 1px solid var(--line); border-radius: 6px;

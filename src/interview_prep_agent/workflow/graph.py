@@ -64,6 +64,20 @@ from .research import gather_research
 from .strategy import build_strategy_with_model
 
 Extractor = Callable[[str], list[Requirement]]
+
+# The preparation stages a run reports as progress, in the order they run.
+# Derived from the graph below and used by the session layer to say "stage
+# 4 of 8"; the input and assembly steps are too quick to name.
+PROGRESS_STAGES = (
+    "extract_evidence",
+    "extract_requirements",
+    "match",
+    "assess_gaps",
+    "research",
+    "build_strategy",
+    "generate_questions",
+    "validate_package",
+)
 Matcher = Callable[[list[Requirement], list[EvidenceItem]], list[RequirementMatch]]
 
 
@@ -275,6 +289,7 @@ def build_prep_workflow(
     min_requirement_chars: int = 12,
     max_search_queries: int = 3,
     max_research_findings: int = 12,
+    on_stage: Callable[[str], None] | None = None,
 ):
     """Compile the full preparation workflow.
 
@@ -319,6 +334,11 @@ def build_prep_workflow(
 
         return build_model()
 
+    def stage(name: str) -> None:
+        # Progress only: nothing about the run depends on the observer.
+        if on_stage is not None:
+            on_stage(name)
+
     def validate_inputs(state: PrepState) -> dict[str, Any]:
         if not state["job_description"].strip():
             raise CorpusError("the job description is empty")
@@ -327,6 +347,7 @@ def build_prep_workflow(
         return {}
 
     def extract_evidence(state: PrepState) -> dict[str, Any]:
+        stage("extract_evidence")
         if state["evidence_format"] == "markdown":
             items = parse_evidence_markdown(state["evidence_source"])
         else:
@@ -334,6 +355,7 @@ def build_prep_workflow(
         return {"evidence": items}
 
     def extract_requirements_node(state: PrepState) -> dict[str, Any]:
+        stage("extract_requirements")
         kept, dropped = guard_requirements(
             extractor(state["job_description"]), min_requirement_chars
         )
@@ -346,6 +368,7 @@ def build_prep_workflow(
         return {"requirements": kept, "dropped_requirements": dropped}
 
     def match(state: PrepState) -> dict[str, Any]:
+        stage("match")
         if matcher is not None:
             verdicts = matcher(state["requirements"], state["evidence"])
         else:
@@ -359,6 +382,7 @@ def build_prep_workflow(
         return {"matches": verdicts}
 
     def assess_gaps(state: PrepState) -> dict[str, Any]:
+        stage("assess_gaps")
         return {"focus_areas": build_focus_areas(state["requirements"], state["matches"])}
 
     def research(state: PrepState) -> dict[str, Any]:
@@ -369,6 +393,7 @@ def build_prep_workflow(
         search provider it contributes an empty list and the run is
         unchanged.
         """
+        stage("research")
         findings = gather_research(
             state["job_description"],
             state.get("requirements", []),
@@ -383,6 +408,7 @@ def build_prep_workflow(
         return {"research_findings": findings}
 
     def build_strategy(state: PrepState) -> dict[str, Any]:
+        stage("build_strategy")
         return {
             "strategy": build_strategy_with_model(
                 state["requirements"],
@@ -397,6 +423,7 @@ def build_prep_workflow(
         }
 
     def generate_questions(state: PrepState) -> dict[str, Any]:
+        stage("generate_questions")
         return {
             "mock_questions": generate_questions_with_model(
                 state["requirements"],
@@ -411,6 +438,7 @@ def build_prep_workflow(
         }
 
     def validate_package(state: PrepState) -> dict[str, Any]:
+        stage("validate_package")
         errors = collect_package_errors(
             state["job_description"],
             state.get("evidence", []),

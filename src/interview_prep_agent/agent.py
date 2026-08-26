@@ -321,6 +321,7 @@ def build_agent_graph(
     max_requirements: int = 50,
     min_questions: int = 8,
     min_requirement_chars: int = 12,
+    on_stage: Callable[[str], None] | None = None,
 ):
     """Compile the evidence-gated loop.
 
@@ -374,6 +375,7 @@ def build_agent_graph(
         min_requirement_chars=min_requirement_chars,
         max_search_queries=max_search_queries,
         max_research_findings=max_research_findings,
+        on_stage=on_stage,
     )
 
     def effective_action_budget(state: AgentState) -> int:
@@ -595,6 +597,7 @@ def run_agent(
     search: Any = None,
     thread_id: str = "agent",
     on_event: Callable[[dict[str, Any]], None] | None = None,
+    on_stage: Callable[[str], None] | None = None,
 ) -> tuple[AgentState, list[dict[str, Any]]]:
     """Run the loop to termination, answering interrupts via the callback.
 
@@ -620,6 +623,8 @@ def run_agent(
         on_event: Optional observer called with each trace entry as it is
             recorded. Purely additive — the trace and the return value are
             identical with or without it.
+        on_stage: Optional observer called with each preparation stage's
+            name as it starts, inside either generation. Progress only.
 
     Returns:
         The final state and the ordered trace.
@@ -647,6 +652,7 @@ def run_agent(
         min_requirements=settings.min_requirements,
         max_requirements=settings.max_requirements,
         min_requirement_chars=settings.min_requirement_chars,
+        on_stage=on_stage,
     )
     config = {"configurable": {"thread_id": thread_id}}
 

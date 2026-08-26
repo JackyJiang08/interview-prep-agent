@@ -253,3 +253,56 @@ describe("research findings", () => {
     expect(some.stages[0].summary).toBe("2 research findings gathered");
   });
 });
+
+describe("progress", () => {
+  const progress = (stage: string, index: number, at?: number): RunAction => ({
+    kind: "message",
+    message: { type: "progress", stage, index, total: 8 },
+    at,
+  });
+
+  it("derives the stage line from the event and the known graph shape", () => {
+    const state = play([progress("match", 3, 1000)]);
+    expect(state.progress).toEqual({
+      stage: "match",
+      index: 3,
+      total: 8,
+      label: "matching evidence to requirements",
+      note: null,
+      startedAt: 1000,
+    });
+    expect(state.phase).toBe("running");
+  });
+
+  it("names what a long model stage is producing, and only those", () => {
+    expect(play([progress("build_strategy", 6)]).progress?.note).toContain("positioning");
+    expect(play([progress("generate_questions", 7)]).progress?.note).toContain("practice questions");
+    expect(play([progress("research", 5)]).progress?.note).toBeNull();
+  });
+
+  it("clears when the generation ends, when a question arrives, and at the end", () => {
+    const generated = play([
+      progress("validate_package", 8),
+      msg({ type: "node_update", node: "generate_initial", delta: { package_valid: true } }),
+    ]);
+    expect(generated.progress).toBeNull();
+    const asked = play([progress("match", 3), INTERRUPT]);
+    expect(asked.progress).toBeNull();
+    const done = play([progress("match", 3), msg({ type: "done", stop_reason: "x" })]);
+    expect(done.progress).toBeNull();
+  });
+
+  it("keeps the elapsed clock out of the reducer: arrival time is stored, never read", () => {
+    const state = play([
+      { kind: "message", message: { type: "node_update", node: "parse_round", delta: {} }, at: 42 },
+    ]);
+    expect(state.stages[0].startedAt).toBe(42);
+    const untimed = play([msg({ type: "node_update", node: "parse_round", delta: {} })]);
+    expect(untimed.stages[0].startedAt).toBeNull();
+  });
+
+  it("ignores a malformed progress event", () => {
+    const before = play([INTERRUPT]);
+    expect(runReducer(before, msg({ type: "progress", stage: 3 }))).toEqual(before);
+  });
+});

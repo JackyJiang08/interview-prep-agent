@@ -4,6 +4,7 @@ import { streamUrl } from "./api";
 import { InterruptCard, ResolutionCard } from "./components/InterruptCard";
 import { Landing } from "./components/Landing";
 import { PackageView } from "./components/PackageView";
+import { ProgressLine } from "./components/ProgressLine";
 import { StageRail } from "./components/StageRail";
 import { flowReducer, initialFlow } from "./flow";
 import { initialRunState, runReducer } from "./reducer";
@@ -82,7 +83,7 @@ function RunScreen({
     socketRef.current = socket;
     socket.onmessage = (event) => {
       try {
-        dispatch({ kind: "message", message: JSON.parse(event.data) });
+        dispatch({ kind: "message", message: JSON.parse(event.data), at: Date.now() });
       } catch {
         // a malformed frame changes nothing
       }
@@ -117,6 +118,9 @@ function RunScreen({
             evidence; questions appear only where a high-importance gap needs
             one.
           </p>
+        )}
+        {state.progress !== null && state.pending === null && (
+          <ProgressLine progress={state.progress} />
         )}
         {state.phase === "disconnected" && (
           <div className="terminal-card failed">

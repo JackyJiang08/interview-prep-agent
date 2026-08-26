@@ -34,7 +34,7 @@ def _drain(ws, answers: dict[str, str]) -> dict[str, list]:
         if message["type"] == "done":
             seen["done"] = message
             return seen
-        seen[message["type"]].append(message)
+        seen.setdefault(message["type"], []).append(message)
         if message["type"] == "interrupt":
             ws.send_json({"type": "answer", "text": answers[message["requirement_id"]]})
 
@@ -389,3 +389,30 @@ def test_preview_honors_the_evidence_ceiling():
     with TestClient(create_app(Settings(max_evidence_chars=10))) as client:
         response = client.post("/api/preview-evidence", json={"evidence_text": "x" * 11})
     assert response.status_code == 413
+
+
+# --- progress -----------------------------------------------------------------
+
+
+def test_progress_events_name_the_stages_in_order_inside_each_generation(client):
+    answers = _demo_answers(client, COMPLETE_DEMO)
+    session_id = _create_demo(client, COMPLETE_DEMO)
+    with client.websocket_connect(f"/api/sessions/{session_id}/stream") as ws:
+        seen = _drain(ws, answers)
+    progress = seen["progress"]
+    stages = [item["stage"] for item in progress]
+    # One full pass per generation: the complete profile asks nothing, so
+    # there are exactly two, each in graph order.
+    expected = [
+        "extract_evidence",
+        "extract_requirements",
+        "match",
+        "assess_gaps",
+        "research",
+        "build_strategy",
+        "generate_questions",
+        "validate_package",
+    ]
+    assert stages == expected * 2
+    assert [item["index"] for item in progress[:8]] == list(range(1, 9))
+    assert {item["total"] for item in progress} == {8}

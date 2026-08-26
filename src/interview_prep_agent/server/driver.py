@@ -18,6 +18,7 @@ from ..corpus import CorpusError
 from ..providers import ProviderError, StructuredModel
 from ..search import SearchError, SearchProvider
 from ..workflow.gates import QualityGateError
+from ..workflow.graph import PROGRESS_STAGES
 from ..workflow.pipeline import _resolve_extractor, _resolve_matcher
 from .sessions import Session
 
@@ -54,6 +55,19 @@ def start_run(session: Session, settings: Settings, model: StructuredModel) -> N
         session.events.put(
             {"type": "node_update", "node": entry["node"], "delta": _business_delta(entry)}
         )
+
+    def on_stage(name: str) -> None:
+        # Progress inside a generation, so the page can say which of the
+        # known stages is running. Stages outside the named set stay quiet.
+        if name in PROGRESS_STAGES:
+            session.events.put(
+                {
+                    "type": "progress",
+                    "stage": name,
+                    "index": PROGRESS_STAGES.index(name) + 1,
+                    "total": len(PROGRESS_STAGES),
+                }
+            )
 
     def ask(requirement_id: str, question: str) -> str:
         session.status = "waiting_for_answer"
@@ -94,6 +108,7 @@ def start_run(session: Session, settings: Settings, model: StructuredModel) -> N
                 search=build_session_search(session),
                 thread_id=session.session_id,
                 on_event=on_event,
+                on_stage=on_stage,
             )
         except ClientGone:
             session.status = "failed"

@@ -1,4 +1,5 @@
 import type { Phase, StageEntry } from "../reducer";
+import { useElapsed } from "./ProgressLine";
 
 const STAGE_LABELS: Record<string, string> = {
   parse_round: "Parse round",
@@ -25,21 +26,29 @@ export function StageRail({ stages, phase }: { stages: StageEntry[]; phase: Phas
         </p>
       ) : (
         <ol aria-live="polite">
-          {stages.map((entry, index) => (
-            <li
-              key={index}
-              className={running && index === stages.length - 1 ? "current" : ""}
-            >
-              <span className="stage-name">
-                {STAGE_LABELS[entry.node] ?? entry.node}
-              </span>
-              {entry.summary && (
-                <div className="stage-summary">{entry.summary}</div>
-              )}
-            </li>
-          ))}
+          {stages.map((entry, index) => {
+            const current = running && index === stages.length - 1;
+            return (
+              <li key={index} className={current ? "current" : ""}>
+                <span className="stage-name">
+                  {STAGE_LABELS[entry.node] ?? entry.node}
+                </span>
+                {current && <CurrentElapsed startedAt={entry.startedAt} />}
+                {entry.summary && (
+                  <div className="stage-summary">{entry.summary}</div>
+                )}
+              </li>
+            );
+          })}
         </ol>
       )}
     </nav>
   );
+}
+
+// The active stage's running time, beside its name.
+function CurrentElapsed({ startedAt }: { startedAt: number | null }) {
+  const elapsed = useElapsed(startedAt);
+  if (elapsed === null) return null;
+  return <span className="stage-elapsed"> {elapsed}</span>;
 }
