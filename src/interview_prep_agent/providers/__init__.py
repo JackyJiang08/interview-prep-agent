@@ -9,7 +9,7 @@ from __future__ import annotations
 from .base import ProviderError, StructuredModel
 
 DEFAULT_PROVIDER = "gemini"
-PROVIDERS = ("gemini", "azure")
+PROVIDERS = ("gemini", "azure", "anthropic")
 
 
 def build_model(provider: str = DEFAULT_PROVIDER, **options: object) -> StructuredModel:
@@ -31,6 +31,10 @@ def build_model(provider: str = DEFAULT_PROVIDER, **options: object) -> Structur
         from .azure import AzureOpenAIModel
 
         return AzureOpenAIModel(**options)  # type: ignore[arg-type]
+    if provider == "anthropic":
+        from .anthropic import AnthropicModel
+
+        return AnthropicModel(**options)  # type: ignore[arg-type]
 
     raise ProviderError(f"Unknown model provider {provider!r}; known: {', '.join(PROVIDERS)}")
 

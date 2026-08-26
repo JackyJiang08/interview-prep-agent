@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "interview-prep-agent"
-version = "0.2.0"
+version = "0.4.0"
 description = "Match job-description requirements against an evidence corpus and label each one PROOF or GAP."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -23,6 +23,7 @@ dependencies = [
     "google-genai>=2.0,<3",
     "python-dotenv>=1.0,<2",
     "openai>=1.50,<4",
+    "anthropic>=1.0,<2",
 ]
 
 [project.optional-dependencies]

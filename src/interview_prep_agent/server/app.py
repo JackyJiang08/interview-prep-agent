@@ -70,8 +70,9 @@ class CreateSession(BaseModel):
     evidence_format: str = Field(default="yaml", pattern="^(yaml|markdown)$")
     round_text: str = ""
     research_text: str = ""
-    provider: str = Field(default="gemini", pattern="^(gemini|azure)$")
+    provider: str = Field(default="gemini", pattern="^(gemini|azure|anthropic)$")
     gemini_api_key: str | None = None
+    anthropic_api_key: str | None = None
     tavily_api_key: str | None = None
     azure_api_key: str | None = None
     azure_endpoint: str | None = None
@@ -199,11 +200,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             mode=body.mode,
             demo_id=body.demo_id if body.mode == "demo" else None,
             provider=body.provider,
-            api_key=(
-                (body.gemini_api_key if body.provider == "gemini" else body.azure_api_key)
-                if body.mode == "live"
-                else None
-            ),
+            api_key=_provider_key(body) if body.mode == "live" else None,
             search_api_key=body.tavily_api_key if body.mode == "live" else None,
             azure_endpoint=body.azure_endpoint if body.mode == "live" else None,
             azure_deployment=body.azure_deployment if body.mode == "live" else None,
@@ -335,15 +332,24 @@ def _find_web_dist() -> Path | None:
     return None
 
 
+def _provider_key(body: CreateSession) -> str | None:
+    """The one key field that belongs to the chosen provider."""
+    return {
+        "gemini": body.gemini_api_key,
+        "azure": body.azure_api_key,
+        "anthropic": body.anthropic_api_key,
+    }[body.provider]
+
+
 def _missing_credentials(body: CreateSession) -> JSONResponse | None:
     """Refuse a live session whose provider credentials are incomplete."""
-    if body.provider == "gemini":
-        if not body.gemini_api_key:
+    if body.provider in ("gemini", "anthropic"):
+        if not _provider_key(body):
             return _refusal(
                 400,
                 "missing_credentials",
-                "live mode with the gemini provider needs gemini_api_key; "
-                "use demo mode to run without one",
+                f"live mode with the {body.provider} provider needs "
+                f"{body.provider}_api_key; use demo mode to run without one",
             )
         return None
     missing = [
@@ -397,7 +403,7 @@ def _build_session_model(session):
                 endpoint=session.azure_endpoint,
                 deployment=session.azure_deployment,
             )
-        return build_model("gemini", api_key=session.api_key)
+        return build_model(session.provider, api_key=session.api_key)
     except ProviderError as error:
         session.status = "failed"
         session.error = {"category": "provider", "message": str(error)}

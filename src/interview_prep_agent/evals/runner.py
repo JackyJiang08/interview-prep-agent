@@ -75,6 +75,8 @@ def _require_environment(suite: str, provider: str = "gemini") -> None:
             missing.append("GEMINI_API_KEY")
         if provider == "azure" and not os.getenv("AZURE_OPENAI_API_KEY"):
             missing.append("AZURE_OPENAI_API_KEY")
+        if provider == "anthropic" and not os.getenv("ANTHROPIC_API_KEY"):
+            missing.append("ANTHROPIC_API_KEY")
     if missing:
         raise RuntimeError("set " + " and ".join(missing) + " before running a remote experiment")
     os.environ.setdefault("LANGSMITH_TRACING", "true")

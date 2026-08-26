@@ -35,11 +35,12 @@ import {
   wakeReducer,
 } from "../wake";
 
-type Provider = "gemini" | "azure";
+type Provider = "gemini" | "azure" | "anthropic";
 
 const KEY_LABELS: Record<Provider, string> = {
   gemini: "Gemini API key",
   azure: "Azure OpenAI API key",
+  anthropic: "Anthropic API key",
 };
 
 // A loaded resume: where it came from, and the text that will be used.
@@ -167,7 +168,11 @@ export function Landing({ onStart }: { onStart: (sessionId: string) => void }) {
       evidence_text: resume.text,
       evidence_format: format,
       provider,
-      ...(provider === "gemini" ? { gemini_api_key: apiKey } : { azure_api_key: apiKey }),
+      ...(provider === "gemini"
+        ? { gemini_api_key: apiKey }
+        : provider === "azure"
+          ? { azure_api_key: apiKey }
+          : { anthropic_api_key: apiKey }),
       round_text: roundText,
       research_text: researchText,
       tavily_api_key: searchKey || undefined,
@@ -282,6 +287,15 @@ export function Landing({ onStart }: { onStart: (sessionId: string) => void }) {
                   onChange={() => setProvider("azure")}
                 />
                 Azure OpenAI
+              </label>
+              <label>
+                <input
+                  type="radio"
+                  name="provider"
+                  checked={provider === "anthropic"}
+                  onChange={() => setProvider("anthropic")}
+                />
+                Claude
               </label>
             </fieldset>
             {provider === "azure" && (

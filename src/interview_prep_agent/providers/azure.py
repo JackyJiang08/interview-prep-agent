@@ -15,6 +15,7 @@ import os
 from typing import Any
 
 from .base import ProviderError, StructuredModel
+from .schema import close_schema
 
 ENV_ENDPOINT = "AZURE_OPENAI_ENDPOINT"
 ENV_API_KEY = "AZURE_OPENAI_API_KEY"
@@ -95,7 +96,7 @@ class AzureOpenAIModel(StructuredModel):
         response arrives structured rather than as prose to be salvaged. It is
         still only a request: the caller validates what comes back.
         """
-        schema = _strict_schema(response_schema)
+        schema = close_schema(response_schema)
         try:
             completion = self._client.chat.completions.create(
                 model=self._deployment,
@@ -121,39 +122,6 @@ class AzureOpenAIModel(StructuredModel):
             raise ProviderError(f"Azure OpenAI returned unparseable JSON: {error}") from error
 
 
-def _strict_schema(schema: dict[str, Any]) -> dict[str, Any]:
-    """Adapt a Pydantic JSON Schema to the strict response format.
-
-    Strict mode requires every object to forbid extra properties and to list
-    every property as required — including the optional ones, which carry a
-    null branch in their type. Pydantic already emits ``additionalProperties:
-    false`` for these models; what it does not do is require optional fields,
-    so this walks the schema and closes that gap. The adaptation is the one
-    genuinely provider-shaped thing in this file, and it is confined to it.
-    """
-    adapted = json.loads(json.dumps(schema))
-    _close_object(adapted)
-    for definition in (adapted.get("$defs") or {}).values():
-        _close_object(definition)
-    return adapted
-
-
-def _close_object(node: Any) -> None:
-    if not isinstance(node, dict):
-        return
-    if node.get("type") == "object" or "properties" in node:
-        properties = node.get("properties") or {}
-        node["additionalProperties"] = False
-        node["required"] = list(properties)
-        for child in properties.values():
-            _close_object(child)
-    for key in ("items", "prefixItems"):
-        child = node.get(key)
-        if isinstance(child, list):
-            for item in child:
-                _close_object(item)
-        elif child is not None:
-            _close_object(child)
-    for key in ("anyOf", "oneOf", "allOf"):
-        for item in node.get(key) or []:
-            _close_object(item)
+# The adaptation that used to live here, kept under its old name. It moved to
+# ``schema.py`` when the third provider needed it too.
+_strict_schema = close_schema

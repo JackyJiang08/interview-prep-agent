@@ -8,8 +8,9 @@ export interface CreateSessionBody {
   evidence_format?: "yaml" | "markdown";
   round_text?: string;
   research_text?: string;
-  provider?: "gemini" | "azure";
+  provider?: "gemini" | "azure" | "anthropic";
   gemini_api_key?: string;
+  anthropic_api_key?: string;
   azure_api_key?: string;
   azure_endpoint?: string;
   azure_deployment?: string;
