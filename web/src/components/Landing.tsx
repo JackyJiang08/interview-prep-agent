@@ -216,7 +216,7 @@ export function Landing({
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (resume.text.trim() === "") {
-      refuse("own", "add your resume first - drop a file, or open the text box and paste it");
+      refuse("own", "add your resume first. Drop a file, or open the text box and paste it");
       return;
     }
     const refusal =
@@ -261,13 +261,13 @@ export function Landing({
               onClick={() => runDemo("sample", SAMPLE_DEMO_ID)}
             >
               Run the sample
-            </button>{" "}
-            - a data analyst posting. You answer three questions; the gates decide
+            </button>
+            : a data analyst posting. You answer three questions; the gates decide
             what counts.
           </p>
           {wake.phase === "waking" && (
             <p className="empty-note" role="status">
-              Starting the server — this demo sleeps when idle and takes a few
+              Starting the server. This demo sleeps when idle and takes a few
               seconds to wake.
             </p>
           )}
@@ -313,9 +313,9 @@ export function Landing({
             />
           </label>
           <p className="key-notice">
-            Keys are held in this page's memory, sent once to create the session,
-            never stored in this browser, and dropped with the session on the
-            server.
+            Keys stay in this page's memory and are sent once to create the
+            session. They are never stored in this browser and are dropped with
+            the session on the server.
           </p>
           <button
             className="primary"
@@ -339,7 +339,7 @@ export function Landing({
           <div className="advanced">
             <fieldset className="choice-row">
               <legend className="empty-note">
-                Model provider - the key above belongs to whichever you pick
+                Model provider. The key above belongs to whichever you pick.
               </legend>
               <label>
                 <input
@@ -372,7 +372,7 @@ export function Landing({
             {provider === "azure" && (
               <>
                 <label>
-                  Azure OpenAI endpoint - the resource URL from your Azure portal
+                  Azure OpenAI endpoint: the resource URL from your Azure portal
                   <input
                     type="text"
                     value={azureEndpoint}
@@ -380,7 +380,7 @@ export function Landing({
                   />
                 </label>
                 <label>
-                  Azure OpenAI deployment - the name you gave the model deployment
+                  Azure OpenAI deployment: the name you gave the model deployment
                   <input
                     type="text"
                     value={azureDeployment}
@@ -390,22 +390,22 @@ export function Landing({
               </>
             )}
             <BoundedTextInput
-              label="Upcoming round, optional - shapes the strategy and the practice questions, never which requirements count as covered"
+              label="Upcoming round, optional. Shapes the strategy and the practice questions. Never changes which requirements count as covered."
               field="round_text"
               rows={1}
               value={roundText}
               onChange={setRoundText}
             />
             <BoundedTextInput
-              label="Role research, optional - notes or excerpts you have gathered about the team or the role. They sharpen the strategy and the questions; they never count as evidence"
+              label="Role research, optional. Notes or excerpts you have gathered about the team or the role. They sharpen the strategy and the questions. They never count as evidence."
               field="research_text"
               rows={3}
               value={researchText}
               onChange={setResearchText}
             />
             <label>
-              Search API key, optional - lets the run look up the role itself
-              instead of relying on your notes alone
+              Search API key, optional. Lets the run look up the role itself
+              instead of relying on your notes alone.
               <input
                 type="password"
                 value={searchKey}
@@ -542,7 +542,7 @@ function ResumeDropZone({
           <>
             <span>
               <span className="file-name">{resume.filename}</span>
-              {" - read as "}
+              {", read as "}
               {describeKind(format, resume.filename)}
               {" · "}
               <button type="button" className="plain" onClick={onOverride}>
@@ -552,7 +552,7 @@ function ResumeDropZone({
             <span className="drop-again">Drop another file to replace it, or {browse}</span>
           </>
         ) : (
-          <span>Drop your resume here - PDF, markdown, or YAML evidence · {browse}</span>
+          <span>Drop your resume here: PDF, markdown, or YAML evidence · {browse}</span>
         )}
       </div>
       <input

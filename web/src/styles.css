@@ -38,8 +38,17 @@ code, .mono {
 }
 .app-header h1 { font-size: 17px; margin: 0; letter-spacing: -0.01em; }
 .app-header .descriptor { color: var(--muted); font-size: 14px; }
-.app-header a { margin-left: auto; color: var(--accent); font-size: 14px; text-decoration: none; }
-.app-header a:hover { text-decoration: underline; }
+.header-links { margin-left: auto; display: flex; gap: 18px; align-items: baseline; }
+.app-header a, .app-header .header-link { color: var(--accent); font-size: 14px; text-decoration: none; }
+.app-header a:hover, .app-header .header-link:hover { text-decoration: underline; }
+
+.how-modal {
+  border: 1px solid var(--ink); border-radius: 6px; padding: 20px 22px;
+  max-width: 440px; background: var(--card); color: var(--ink);
+}
+.how-modal::backdrop { background: rgba(20, 20, 20, 0.25); }
+.how-modal ol { margin: 10px 0 12px; padding-left: 22px; display: grid; gap: 6px; }
+.how-modal .primary { margin-top: 10px; }
 
 main { max-width: 1080px; margin: 0 auto; padding: 28px 24px 80px; }
 

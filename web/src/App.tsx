@@ -13,18 +13,18 @@ export default function App() {
   return (
     <>
       <header className="app-header">
-        <h1>interview-prep-agent</h1>
-        <span className="descriptor">
-          Traceable interview preparation - models advise, deterministic gates
-          admit.
-        </span>
-        <a
-          href="https://github.com/JackyJiang08/interview-prep-agent"
-          rel="noreferrer"
-          target="_blank"
-        >
-          GitHub
-        </a>
+        <h1>Interview Prep Agent</h1>
+        <span className="descriptor">Evidence-backed interview preparation.</span>
+        <nav className="header-links" aria-label="About">
+          <HowItWorks />
+          <a
+            href="https://github.com/JackyJiang08/interview-prep-agent"
+            rel="noreferrer"
+            target="_blank"
+          >
+            GitHub
+          </a>
+        </nav>
       </header>
       <main>
         {flow.screen === "landing" || flow.sessionId === null ? (
@@ -37,6 +37,32 @@ export default function App() {
           <RunScreen sessionId={flow.sessionId} onReset={() => dispatch({ kind: "back" })} />
         )}
       </main>
+    </>
+  );
+}
+
+// Three steps, in a small dialog, for a visitor who has never seen this.
+function HowItWorks() {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  return (
+    <>
+      <button type="button" className="plain header-link" onClick={() => dialogRef.current?.showModal()}>
+        How it works
+      </button>
+      <dialog ref={dialogRef} className="how-modal" aria-labelledby="how-title">
+        <h3 id="how-title">How it works</h3>
+        <ol>
+          <li>Paste a job posting and your resume.</li>
+          <li>Answer a few questions about the gaps the posting exposes.</li>
+          <li>Get a preparation package where every claim cites its evidence.</li>
+        </ol>
+        <p className="empty-note">
+          No key is needed for the sample. Your own run uses your own model key.
+        </p>
+        <button className="primary" type="button" onClick={() => dialogRef.current?.close()}>
+          Close
+        </button>
+      </dialog>
     </>
   );
 }
@@ -121,7 +147,7 @@ function RunScreen({
           <div className="terminal-card">
             <p className="stop">
               {state.stopReason === "valid_package_complete"
-                ? "Run complete - the package passed every gate."
+                ? "Run complete. The package passed every gate."
                 : `Run ended: ${state.stopReason ?? "no stop reason"}`}
             </p>
             <button className="primary" type="button" onClick={onReset}>

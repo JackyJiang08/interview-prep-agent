@@ -181,8 +181,8 @@ export function encodeBase64(bytes: Uint8Array): string {
 
 export function describeTransportFailure(cause: unknown): string {
   return isTimeout(cause)
-    ? "the server did not answer within a minute - it may still be waking; try again"
-    : "the request never reached the server - check the connection and try again";
+    ? "the server did not answer within a minute. It may still be waking; try again"
+    : "the request never reached the server. Check the connection and try again";
 }
 
 function isTimeout(cause: unknown): boolean {

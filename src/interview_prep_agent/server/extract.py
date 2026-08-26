@@ -59,7 +59,7 @@ def extract_resume(pdf_bytes: bytes) -> tuple[str, int]:
         raise ExtractionRefused(
             422,
             "no_text_layer",
-            "this PDF has no text layer - it is likely a scan; paste the resume text instead",
+            "this PDF has no text layer. It is likely a scan; paste the resume text instead",
         )
     return normalize_resume_text(pages), len(pages)
 

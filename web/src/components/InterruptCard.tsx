@@ -40,7 +40,7 @@ export function InterruptCard({
       <p>{pending.question}</p>
       {assessing ? (
         <p className="empty-note" role="status">
-          Assessing the answer against the admission gates...
+          Checking the answer against the admission gates.
         </p>
       ) : (
         <form
@@ -50,7 +50,7 @@ export function InterruptCard({
           }}
         >
           <label>
-            Your answer - one specific example, the method, the result
+            Your answer: one specific example, the method, the result
             <textarea
               rows={4}
               value={text}

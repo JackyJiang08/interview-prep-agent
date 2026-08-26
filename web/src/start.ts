@@ -24,7 +24,7 @@ export const SLOW_START_MS = 1500;
 export const idleStart: StartState = { phase: "idle" };
 
 export const WAKE_LINE =
-  "Starting the server — this demo sleeps when idle and takes a few seconds to wake.";
+  "Starting the server. This demo sleeps when idle and takes a few seconds to wake.";
 
 export function startReducer(state: StartState, action: StartAction): StartState {
   switch (action.kind) {

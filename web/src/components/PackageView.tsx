@@ -115,7 +115,7 @@ export function PackageView({
                   <td>
                     {match.matches.length === 0 ? (
                       <span className="empty-note">
-                        no supporting evidence - an honest gap
+                        no supporting evidence: an honest gap
                       </span>
                     ) : (
                       match.matches.map((item) => chip(item.evidence_id))
@@ -174,7 +174,7 @@ export function PackageView({
         ))}
         {prepPackage.strategy.risks_to_address.length > 0 && (
           <>
-            <h2>Risks - the gaps, kept visible</h2>
+            <h2>Risks: the gaps, kept visible</h2>
             {prepPackage.strategy.risks_to_address.map((risk) => (
               <div className="qa" key={`risk-${risk.requirement_id}`}>
                 <h3>
@@ -193,7 +193,7 @@ export function PackageView({
           <div className="qa" key={index}>
             <h3>{question.question}</h3>
             <p className="probe">
-              Probes <code>{question.requirement_id}</code> - follow-up:{" "}
+              Probes <code>{question.requirement_id}</code>. Follow-up:{" "}
               {withResearchChips(question.follow_up_probe)}
             </p>
             <p>{question.evidence_ids.map(chip)}</p>
@@ -264,9 +264,9 @@ function EvidenceDetail({
       {item.id.startsWith("CL-") ? (
         <div className="prov">
           <p>
-            Admitted from a clarification answer. This is the accepted claim -
-            what survived the assessment and the admission gates - not the raw
-            answer, which stays in the audit record.
+            Admitted from a clarification answer. This is the accepted claim:
+            what survived the assessment and the admission gates. The raw answer
+            stays in the audit record.
           </p>
           {item.question != null && <p>Question asked: {item.question}</p>}
           {item.addresses_requirement_id != null && (
@@ -282,7 +282,7 @@ function EvidenceDetail({
             <p>Skills: {item.skills.join(", ")}</p>
           )}
           {item.impact != null && <p>Impact: {item.impact}</p>}
-          <p>Source: {item.source ?? "evidence corpus"}</p>
+          <p>Source: {item.source ?? "your evidence"}</p>
         </div>
       )}
       <button className="primary" type="button" onClick={onClose}>
@@ -308,7 +308,7 @@ function ResearchDetail({
       <div className="prov">
         <p>
           Role intelligence, not candidate evidence. It informs what to
-          emphasize and how realistic a question sounds; it can never support a
+          emphasize and how realistic a question sounds. It can never support a
           match or become something the candidate claims.
         </p>
         <p>
