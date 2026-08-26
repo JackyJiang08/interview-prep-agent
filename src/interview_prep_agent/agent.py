@@ -123,6 +123,8 @@ class AgentState(TypedDict, total=False):
     evidence_format: str
     round_text: str
     research_text: str
+    company: str
+    role_title: str
     # round context, parsed once
     round_context: InterviewRound | None
     # admission and audit, additive
@@ -164,6 +166,8 @@ class AgentInput(TypedDict):
     evidence_format: str
     round_text: str
     research_text: str
+    company: str
+    role_title: str
 
 
 def select_next_gap(
@@ -247,9 +251,17 @@ def build_question(gap: Requirement) -> str:
     )
 
 
-def build_round_parsing_prompt(round_text: str) -> str:
-    """Place the freeform round text after the parsing instructions."""
-    return f"{ROUND_PARSING_INSTRUCTIONS}\n----- ROUND DESCRIPTION -----\n{round_text}\n"
+def build_round_parsing_prompt(round_text: str, company: str = "", role_title: str = "") -> str:
+    """Place the freeform round text after the parsing instructions.
+
+    The stated company and role, when given, precede the description as
+    context the parser may draw on; they are never a substitute for it.
+    """
+    context = ""
+    if company.strip() or role_title.strip():
+        parts = [part for part in (role_title.strip(), company.strip()) if part]
+        context = f"----- ROLE -----\nThe candidate is interviewing for: {' at '.join(parts)}\n"
+    return f"{ROUND_PARSING_INSTRUCTIONS}\n{context}----- ROUND DESCRIPTION -----\n{round_text}\n"
 
 
 def build_assessment_prompt(gap: Requirement, question: str, answer: str) -> str:
@@ -378,7 +390,10 @@ def build_agent_graph(
         if not round_text:
             return {"round_context": None}
         payload = resolve_model().generate_json(
-            build_round_parsing_prompt(round_text), InterviewRound.model_json_schema()
+            build_round_parsing_prompt(
+                round_text, state.get("company", "") or "", state.get("role_title", "") or ""
+            ),
+            InterviewRound.model_json_schema(),
         )
         try:
             parsed = InterviewRound.model_validate(payload, from_attributes=True)
@@ -406,6 +421,8 @@ def build_agent_graph(
                 "evidence_format": "corpus",
                 "round_context": state.get("round_context"),
                 "research_text": state.get("research_text", ""),
+                "company": state.get("company", "") or "",
+                "role_title": state.get("role_title", "") or "",
             }
         )
         return {field: result.get(field) for field in WORKFLOW_RESULT_FIELDS}
@@ -573,6 +590,8 @@ def run_agent(
     matcher: Matcher | None = None,
     round_text: str = "",
     research_text: str = "",
+    company: str = "",
+    role_title: str = "",
     search: Any = None,
     thread_id: str = "agent",
     on_event: Callable[[dict[str, Any]], None] | None = None,
@@ -696,6 +715,8 @@ def run_agent(
         "evidence_format": evidence_format,
         "round_text": round_text,
         "research_text": research_text,
+        "company": company,
+        "role_title": role_title,
     }
     while True:
         pending: list[dict[str, Any]] = []

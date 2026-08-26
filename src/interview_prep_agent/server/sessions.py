@@ -42,6 +42,9 @@ class Session:
     round_text: str
     artifacts_dir: Path
     research_text: str = ""
+    # Optional stated company and role title; research and preparation only.
+    company: str = ""
+    role_title: str = ""
     demo_id: str | None = None
     # Live-mode credentials. In memory only, for provider construction;
     # excluded from every serialization of the session and dropped with it.

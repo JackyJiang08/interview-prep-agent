@@ -8,6 +8,8 @@ export interface CreateSessionBody {
   evidence_format?: "yaml" | "markdown";
   round_text?: string;
   research_text?: string;
+  company?: string;
+  role_title?: string;
   provider?: "gemini" | "azure" | "anthropic";
   extractor?: "lexical" | "llm";
   matcher?: "lexical" | "llm";

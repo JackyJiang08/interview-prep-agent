@@ -200,6 +200,8 @@ def run_prep(
     model: StructuredModel | None = None,
     research_text: str = "",
     search=None,
+    company: str = "",
+    role_title: str = "",
 ) -> PrepState:
     """Run the full preparation graph and return its final state.
 
@@ -250,6 +252,8 @@ def run_prep(
             "evidence_source": evidence_source,
             "evidence_format": evidence_format,
             "research_text": research_text,
+            "company": company,
+            "role_title": role_title,
         }
     )
 

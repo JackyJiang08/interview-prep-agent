@@ -11,6 +11,8 @@ export const INPUT_CEILINGS = {
   evidence_text: 50_000,
   round_text: 2_000,
   research_text: 20_000,
+  company: 200,
+  role_title: 200,
 } as const;
 
 export type BoundedField = keyof typeof INPUT_CEILINGS;
@@ -20,6 +22,8 @@ const FIELD_LABELS: Record<BoundedField, string> = {
   evidence_text: "the evidence",
   round_text: "the round description",
   research_text: "the research notes",
+  company: "the company",
+  role_title: "the role title",
 };
 
 // The same refusal the server would send, in the same tone, before the

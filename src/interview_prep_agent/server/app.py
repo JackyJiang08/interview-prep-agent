@@ -71,6 +71,8 @@ class CreateSession(BaseModel):
     evidence_format: str = Field(default="yaml", pattern="^(yaml|markdown)$")
     round_text: str = ""
     research_text: str = ""
+    company: str = ""
+    role_title: str = ""
     provider: str = Field(default="gemini", pattern="^(gemini|azure|anthropic)$")
     # Stage overrides. Omitted means the right default for the mode: a live
     # session runs model-backed extraction and matching end to end, a demo
@@ -224,6 +226,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             azure_endpoint=body.azure_endpoint if body.mode == "live" else None,
             azure_deployment=body.azure_deployment if body.mode == "live" else None,
             research_text=body.research_text,
+            company=body.company.strip(),
+            role_title=body.role_title.strip(),
             **inputs,
         )
         return JSONResponse(status_code=201, content={"session_id": session.session_id})
@@ -435,6 +439,8 @@ def _oversize(body: CreateSession, settings: Settings) -> JSONResponse | None:
         ("evidence_text", body.evidence_text, settings.max_evidence_chars),
         ("round_text", body.round_text, settings.max_round_chars),
         ("research_text", body.research_text, settings.max_research_chars),
+        ("company", body.company, settings.max_role_field_chars),
+        ("role_title", body.role_title, settings.max_role_field_chars),
     )
     for name, value, ceiling in checks:
         if len(value) > ceiling:

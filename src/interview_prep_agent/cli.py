@@ -109,6 +109,16 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     prep.add_argument(
+        "--company",
+        default="",
+        help="the company, optional; names the research queries and reaches preparation only",
+    )
+    prep.add_argument(
+        "--role-title",
+        default="",
+        help="the role title, optional; same reach as --company",
+    )
+    prep.add_argument(
         "--extractor",
         choices=EXTRACTORS,
         default=LEXICAL,
@@ -156,6 +166,16 @@ def build_parser() -> argparse.ArgumentParser:
             "optional file of role research notes; informs strategy and "
             "questions only, never matching"
         ),
+    )
+    agent.add_argument(
+        "--company",
+        default="",
+        help="the company, optional; names the research queries and reaches preparation only",
+    )
+    agent.add_argument(
+        "--role-title",
+        default="",
+        help="the role title, optional; same reach as --company",
     )
     agent.add_argument(
         "--extractor",
@@ -313,6 +333,8 @@ def run_prep_command(args: argparse.Namespace) -> int:
             model=model,
             research_text=research_text,
             search=maybe_build_search_provider(),
+            company=args.company,
+            role_title=args.role_title,
         )
     except (CorpusError, ProviderError, QualityGateError, OSError) as error:
         print(f"error: {error}", file=sys.stderr)
@@ -376,6 +398,8 @@ def run_agent_command(args: argparse.Namespace) -> int:
             round_text=round_text,
             research_text=research_text,
             search=maybe_build_search_provider(),
+            company=args.company,
+            role_title=args.role_title,
         )
     except (CorpusError, ProviderError, QualityGateError, OSError) as error:
         print(f"error: {error}", file=sys.stderr)

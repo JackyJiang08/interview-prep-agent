@@ -231,6 +231,10 @@ class PrepState(TypedDict, total=False):
     # research informs preparation only, and findings are never matchable.
     research_text: str
     research_findings: list[ResearchFinding]
+    # Optional stated company and role title. They name the research
+    # queries and reach the preparation prompts; matching never sees them.
+    company: str
+    role_title: str
     # derived source evidence
     evidence: list[EvidenceItem]
     # grounded intermediates
@@ -372,6 +376,8 @@ def build_prep_workflow(
             search,
             max_queries=max_search_queries,
             max_findings=max_research_findings,
+            company=state.get("company", "") or "",
+            role_title=state.get("role_title", "") or "",
         )
         check_research(findings, max_research_findings)
         return {"research_findings": findings}
@@ -385,6 +391,8 @@ def build_prep_workflow(
                 resolve_model(),
                 round_context=state.get("round_context"),
                 research=state.get("research_findings", []),
+                company=state.get("company", "") or "",
+                role_title=state.get("role_title", "") or "",
             )
         }
 
@@ -397,6 +405,8 @@ def build_prep_workflow(
                 resolve_model(),
                 round_context=state.get("round_context"),
                 research=state.get("research_findings", []),
+                company=state.get("company", "") or "",
+                role_title=state.get("role_title", "") or "",
             )
         }
 

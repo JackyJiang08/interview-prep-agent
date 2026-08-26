@@ -46,32 +46,47 @@ def parse_provided_research(text: str) -> list[tuple[str, str]]:
     return pairs
 
 
+def role_label(job_description: str, company: str = "", role_title: str = "") -> str:
+    """What the queries name: the stated role at the stated company when the
+    visitor gave them, else the posting's first non-empty line, a guess."""
+    stated = " ".join(
+        part
+        for part in (role_title.strip(), f"at {company.strip()}" if company.strip() else "")
+        if part
+    )
+    if stated:
+        return stated
+    return next((line.strip() for line in job_description.splitlines() if line.strip()), "")
+
+
 def build_queries(
     job_description: str,
     requirements: Sequence[Requirement],
     max_queries: int,
+    company: str = "",
+    role_title: str = "",
 ) -> list[str]:
     """Build the bounded, deterministic query set.
 
-    The posting's first non-empty line names the role (and often the
-    company); the remaining queries come from the highest-importance
-    requirements in queue order.
+    With a company and a role stated, the queries name them: reported
+    interview questions, the interview process and team context. Without
+    them the posting's first non-empty line stands in, which is a guess.
+    The remaining queries come from the highest-importance requirements in
+    queue order. Sources behind a login are out of scope here; the pasted
+    notes cover them.
     """
     if max_queries <= 0:
         return []
-    role_line = next(
-        (line.strip() for line in job_description.splitlines() if line.strip()),
-        "",
-    )
+    label = role_label(job_description, company, role_title)
     queries: list[str] = []
-    if role_line:
-        queries.append(f"{role_line} reported interview questions")
-        queries.append(f"{role_line} role expectations")
+    if label:
+        queries.append(f"{label} interview questions reported by candidates")
+        queries.append(f"{label} interview process and team")
     ranked = sorted(requirements, key=lambda item: (-(item.importance or 0), item.id))
     for requirement in ranked:
         if len(queries) >= max_queries:
             break
-        queries.append(f"{role_line} interview {requirement.text}".strip())
+        queries.append(f"{label} interview {requirement.text}".strip())
     return queries[:max_queries]
 
 
@@ -82,6 +97,8 @@ def gather_research(
     search: SearchProvider | None,
     max_queries: int,
     max_findings: int,
+    company: str = "",
+    role_title: str = "",
 ) -> list[ResearchFinding]:
     """Assemble the run's findings: provided notes first, then search.
 
@@ -116,7 +133,9 @@ def gather_research(
         mint(ResearchSourceKind.PROVIDED, title, summary, None, PROVIDED_MARKER)
 
     if search is not None and max_findings > 0:
-        for query in build_queries(job_description, requirements, max_queries):
+        for query in build_queries(
+            job_description, requirements, max_queries, company=company, role_title=role_title
+        ):
             try:
                 results = search.search(query, max_results=3)
             except SearchError:

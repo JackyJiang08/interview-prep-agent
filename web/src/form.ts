@@ -29,6 +29,8 @@ export interface FormState {
   apiKey: string;
   provider: Provider;
   stages: Stages;
+  company: string;
+  roleTitle: string;
   roundText: string;
   researchText: string;
   searchKey: string;
@@ -44,6 +46,8 @@ export const initialForm: FormState = {
   apiKey: "",
   provider: "gemini",
   stages: "llm",
+  company: "",
+  roleTitle: "",
   roundText: "",
   researchText: "",
   searchKey: "",

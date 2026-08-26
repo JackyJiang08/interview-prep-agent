@@ -23,7 +23,7 @@ from ..models import (
     ResearchFinding,
 )
 from ..providers import ProviderError, StructuredModel
-from .strategy import _research_section, _round_section
+from .strategy import _research_section, _role_section, _round_section
 
 MIN_QUESTIONS = 8
 MAX_REQUESTED_QUESTIONS = 12
@@ -50,6 +50,11 @@ Rules:
   realistic - reported themes, phrasing, expectations - and you may cite a
   finding inline by its SRC- identifier. Findings are role intelligence, not
   candidate evidence: never cite one as support for a match.
+- When a role section names the company or the role title and research
+  findings exist, prefer questions grounded in those findings: write them as
+  reportedly asked for that role and cite the finding's SRC- identifier in
+  the question or the follow-up. A question with no supporting finding stays
+  grounded in the requirements, never in an invented report.
 
 Return nothing except data conforming to the supplied schema.
 """
@@ -65,6 +70,8 @@ def build_question_prompt(
     strategy: InterviewStrategy,
     round_context: InterviewRound | None = None,
     research: Sequence[ResearchFinding] = (),
+    company: str = "",
+    role_title: str = "",
 ) -> str:
     """Place the validated state after the instructions, with boundaries."""
     requirement_rows = [{"requirement_id": r.id, "requirement": r.text} for r in requirements]
@@ -84,6 +91,7 @@ def build_question_prompt(
         f"{_dump(match_rows)}\n"
         "----- STRATEGY -----\n"
         f"{_dump(strategy.model_dump(mode='json'))}\n"
+        f"{_role_section(company, role_title)}"
         f"{_round_section(round_context)}"
         f"{_research_section(research)}"
     )
@@ -115,6 +123,8 @@ def generate_questions_with_model(
     model: StructuredModel,
     round_context: InterviewRound | None = None,
     research: Sequence[ResearchFinding] = (),
+    company: str = "",
+    role_title: str = "",
 ) -> list[MockQuestion]:
     """Generate practice questions using a provider.
 
@@ -122,7 +132,9 @@ def generate_questions_with_model(
         ProviderError: If the call fails or the response cannot be used.
     """
     payload = model.generate_json(
-        build_question_prompt(requirements, verdicts, strategy, round_context, research),
+        build_question_prompt(
+            requirements, verdicts, strategy, round_context, research, company, role_title
+        ),
         response_schema(),
     )
     return parse_questions(payload)

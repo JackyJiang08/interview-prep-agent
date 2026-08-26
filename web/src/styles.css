@@ -61,6 +61,8 @@ h3 { font-size: 16px; margin: 0 0 6px; }
 .card h2 { margin-bottom: 14px; }
 .card form, .advanced { display: grid; gap: 14px; max-width: 640px; }
 .sample-line { margin: 0 0 2px; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.pair + .key-notice { margin-top: -8px; }
 .advanced { margin-top: 14px; padding-left: 14px; border-left: 2px solid var(--line); }
 label { display: grid; gap: 4px; font-size: 14px; color: var(--muted); }
 textarea, input[type="text"], input[type="password"] {
@@ -112,6 +114,7 @@ button.disclosure[aria-expanded="true"]::before { content: "\25BE"; }
 @media (max-width: 480px) {
   main { padding: 20px 14px 60px; }
   .card { padding: 18px 14px 16px; }
+  .pair { grid-template-columns: 1fr; }
   .demo-row { grid-template-columns: 1fr; }
   .demo-row .primary { justify-self: start; }
 }

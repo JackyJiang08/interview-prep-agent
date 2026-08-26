@@ -84,6 +84,8 @@ export function Landing({
     apiKey,
     provider,
     stages,
+    company,
+    roleTitle,
     roundText,
     researchText,
     searchKey,
@@ -98,6 +100,8 @@ export function Landing({
   const setApiKey = (value: string) => set({ apiKey: value });
   const setProvider = (value: Provider) => set({ provider: value });
   const setStages = (value: Stages) => set({ stages: value });
+  const setCompany = (value: string) => set({ company: value });
+  const setRoleTitle = (value: string) => set({ roleTitle: value });
   const setRoundText = (value: string) => set({ roundText: value });
   const setResearchText = (value: string) => set({ researchText: value });
   const setSearchKey = (value: string) => set({ searchKey: value });
@@ -225,7 +229,9 @@ export function Landing({
       overCeiling("jd_text", jdText.length) ??
       overCeiling("evidence_text", resume.text.length) ??
       overCeiling("round_text", roundText.length) ??
-      overCeiling("research_text", researchText.length);
+      overCeiling("research_text", researchText.length) ??
+      overCeiling("company", company.length) ??
+      overCeiling("role_title", roleTitle.length);
     if (refusal !== null) {
       refuse("own", refusal);
       return;
@@ -245,6 +251,8 @@ export function Landing({
           : { anthropic_api_key: apiKey }),
       round_text: roundText,
       research_text: researchText,
+      company,
+      role_title: roleTitle,
       tavily_api_key: searchKey || undefined,
       azure_endpoint: azureEndpoint || undefined,
       azure_deployment: azureDeployment || undefined,
@@ -276,6 +284,30 @@ export function Landing({
             </p>
           )}
           {noticeAt("sample")}
+
+          <div className="pair">
+            <label>
+              Company, optional
+              <input
+                type="text"
+                value={company}
+                onChange={(event) => setCompany(event.target.value)}
+                autoComplete="organization"
+              />
+            </label>
+            <label>
+              Role title, optional
+              <input
+                type="text"
+                value={roleTitle}
+                onChange={(event) => setRoleTitle(event.target.value)}
+                autoComplete="organization-title"
+              />
+            </label>
+          </div>
+          <p className="key-notice">
+            Naming them sharpens the role research and the practice questions.
+          </p>
 
           <label>
             Job posting
@@ -426,7 +458,7 @@ export function Landing({
               onChange={setRoundText}
             />
             <BoundedTextInput
-              label="Role research, optional. Notes or excerpts you have gathered about the team or the role. They sharpen the strategy and the questions. They never count as evidence."
+              label="Role research, optional. Paste notes or excerpts you have access to, for example interview reports. They sharpen the strategy and the questions. They never count as evidence."
               field="research_text"
               rows={3}
               value={researchText}

@@ -89,6 +89,8 @@ def start_run(session: Session, settings: Settings, model: StructuredModel) -> N
                 matcher=_resolve_matcher(session.matcher, model),
                 round_text=session.round_text,
                 research_text=session.research_text,
+                company=session.company,
+                role_title=session.role_title,
                 search=build_session_search(session),
                 thread_id=session.session_id,
                 on_event=on_event,

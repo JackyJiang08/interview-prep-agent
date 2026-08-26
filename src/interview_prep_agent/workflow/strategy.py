@@ -42,6 +42,8 @@ Rules:
 - When an interview round section is supplied, tailor emphasis and framing to
   that round. Round context changes what to emphasize, never what the
   candidate can claim; invent no round details beyond the section.
+- When a role section names the company or the role title, address them by
+  name in the positioning and the themes; it adds context, never a claim.
 - When a role research section is supplied, use it to sharpen emphasis and
   realism, and you may cite a finding inline by its SRC- identifier. Findings
   are role intelligence, not candidate evidence: never cite one as support
@@ -69,6 +71,16 @@ def _research_section(findings: Sequence[ResearchFinding]) -> str:
         for item in findings
     ]
     return f"----- ROLE RESEARCH -----\n{json.dumps(rows, indent=2, ensure_ascii=False)}\n"
+
+
+def _role_section(company: str = "", role_title: str = "") -> str:
+    """Render the optional role block: the company and the role title the
+    candidate stated, so preparation can address them by name. Same
+    invariant as the other optional sections: preparation only."""
+    if not company.strip() and not role_title.strip():
+        return ""
+    payload = {"company": company.strip() or None, "role_title": role_title.strip() or None}
+    return f"----- ROLE -----\n{_dump(payload)}\n"
 
 
 def _round_section(round_context: InterviewRound | None) -> str:
@@ -99,6 +111,8 @@ def build_strategy_prompt(
     focus_areas: Sequence[FocusArea],
     round_context: InterviewRound | None = None,
     research: Sequence[ResearchFinding] = (),
+    company: str = "",
+    role_title: str = "",
 ) -> str:
     """Place the validated state after the instructions, with boundaries."""
     requirement_rows = [
@@ -123,6 +137,7 @@ def build_strategy_prompt(
         f"{_dump(match_rows)}\n"
         "----- FOCUS AREAS -----\n"
         f"{_dump(focus_rows)}\n"
+        f"{_role_section(company, role_title)}"
         f"{_round_section(round_context)}"
         f"{_research_section(research)}"
     )
@@ -154,6 +169,8 @@ def build_strategy_with_model(
     model: StructuredModel,
     round_context: InterviewRound | None = None,
     research: Sequence[ResearchFinding] = (),
+    company: str = "",
+    role_title: str = "",
 ) -> InterviewStrategy:
     """Compose the strategy using a provider.
 
@@ -164,7 +181,9 @@ def build_strategy_with_model(
         ProviderError: If the call fails or the response cannot be used.
     """
     payload = model.generate_json(
-        build_strategy_prompt(requirements, verdicts, focus_areas, round_context, research),
+        build_strategy_prompt(
+            requirements, verdicts, focus_areas, round_context, research, company, role_title
+        ),
         response_schema(),
     )
     return parse_strategy(payload)
