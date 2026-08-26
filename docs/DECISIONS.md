@@ -347,3 +347,32 @@ and the bounds are configurable for callers who want to hold a model to it.
 
 The cost is that a moderately wrong count passes. Catching that needs an
 evaluation set, not a tighter constant.
+
+## The image stays public
+
+The container image the deploy workflow pushes to the registry starts
+private, and the deployment leaves it public instead. The reasoning is that
+nothing argues for privacy: it is a public demo of a public repository, and
+the image is a deterministic function of that repository — no key, no
+credential, no private input bakes into it, which the keyless-by-design
+session layer already guarantees. What publicity buys is one fewer
+credential surface: a private image needs a registry credential registered
+on the Container App and a token that someone must scope, store and
+eventually rotate. The cost is that anyone can pull and inspect the image —
+which here discloses exactly what the repository already discloses.
+
+## Scale to zero, with the wake absorbed in the page
+
+The Container App runs zero replicas when idle. For a credit-funded demo
+that is the difference between costing approximately nothing and paying for
+an always-on replica nobody is using; it is also the setting that caps a
+runaway bill, together with the one-replica ceiling.
+
+The cost lands on the first visitor after an idle stretch: their request
+waits out a container start measured in seconds, and a landing page that
+failed or hung there would read as a dead project. The trade is accepted
+and the cost absorbed in the interface — the demo fetch runs under a short
+timeout, a miss shows one line naming what is happening, and retries back
+off until the server answers. The alternative, a minimum of one replica,
+buys latency for the first visitor with an idle bill for everyone else, and
+a demonstration does not have the traffic to justify it.

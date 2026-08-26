@@ -207,6 +207,19 @@ The first entry is the deliberate-regression record above; the pattern across
 future entries is what tells you whether the next layer is worth building or
 the current one is not finished.
 
+## Deployment
+
+The system's responsibility ends at one container image: the built web app
+served by the session layer, which keeps sessions in process memory and
+holds no credentials of its own. Everything past that line belongs to the
+platform — TLS termination, the public hostname, scaling between zero and
+one replica, restarting a failed container. The boundary is what makes
+scale-to-zero safe here: a session already lives and dies inside one
+process, so a platform that stops the process when idle discards nothing
+the design promised to keep. What the platform cannot absorb — the cold
+start a wake costs — surfaces in the web app, which names the wait instead
+of hiding it. [`DEPLOYMENT.md`](DEPLOYMENT.md) records the setup.
+
 ## What this architecture gives up
 
 Stating the cost plainly, since the layering is a choice and not a free one:

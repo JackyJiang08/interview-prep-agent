@@ -75,9 +75,13 @@ az containerapp create \
   --env-vars PORT=8000
 ```
 
-A package pushed to the registry for the first time is private, so register
-the credentials once — before the first workflow run, or the roll-forward
-step will fail to pull:
+A package pushed to the registry for the first time starts private. This
+deployment leaves the image public instead — flip the package's visibility
+on GitHub after the first push, and the app pulls it anonymously with no
+registry credential registered at all; the reasons are in
+[`DECISIONS.md`](DECISIONS.md). The step below applies only if the package
+is made private, and must then run before the first workflow run, or the
+roll-forward step will fail to pull:
 
 ```bash
 az containerapp registry set \
@@ -161,8 +165,11 @@ whole loop: one manual trigger per deployment, nothing else to remember.
 
 The app is configured to scale to zero. An idle deployment runs no replicas
 and costs approximately nothing; a request wakes one replica, which pays a
-cold start of a few seconds. The ceiling is one replica at 0.5 vCPU, so a
-runaway cost is not available even under load — requests queue instead. This
+cold start of a few seconds. The landing page absorbs that wake: its demo
+fetch runs under a short timeout, explains the wait in one line, and retries
+with backoff until the server answers. The ceiling is one replica at 0.5
+vCPU, so a runaway cost is not available even under load — requests queue
+instead. This
 suits a credit-funded deployment, and the session bounds below keep the
 queue honest.
 
@@ -183,5 +190,10 @@ queue honest.
   research text and each answer. Every one is a setting, and exceeding any of
   them is a structured refusal rather than a crash. Tighten them for a public
   deployment; the defaults suit a demonstration.
+- **Every response carries the security headers**: transport security,
+  nosniff, no framing, a strict referrer policy, and a content security
+  policy written against what the built page actually loads — same-origin
+  script, stylesheet and API calls, plus the session socket's ws and wss
+  origins. The server tests assert all of them.
 - **CORS is closed by default.** Set `cors_origins` only if a different origin
   must reach the API.

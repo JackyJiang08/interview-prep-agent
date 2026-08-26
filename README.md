@@ -4,6 +4,8 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
+**Live demo**: [interview-prep-agent on Azure Container Apps](https://interview-prep-agent.livelytree-f16ea3df.centralus.azurecontainerapps.io) — demo mode, no key needed; sleeps when idle.
+
 Turns a job posting plus attested experience — a YAML corpus or a markdown
 resume — into a validated interview preparation package. Every claim cites
 the source that justifies it, so a wrong answer is a wrong link a reader can
@@ -23,6 +25,7 @@ round. Models advise; deterministic gates admit.
 | [Preparation package](docs/METHODOLOGY.md#stages-3-5---assessment-strategy-questions) — gap assessment, strategy, questions, package gate with a routed error branch | **shipped** |
 | [Governed evidence loop](docs/ARCHITECTURE.md#layer-2--bounded-decision-layer--shipped) — every gap asked once, code-owned admission gate, round-aware regeneration | **shipped — behavior locked by the regression suite** |
 | [Regression evaluation](docs/METHODOLOGY.md#evaluation) — scenario suite scoring trajectory, state and outcome; CI-enforced | **shipped** |
+| [Deployment](docs/DEPLOYMENT.md) — one container, CI-built, Azure Container Apps, scale-to-zero | **shipped** |
 | [Durable state](docs/ARCHITECTURE.md#layer-3--durable-state--planned) — same-thread resume already persists within a run; state across runs remains planned | planned |
 | [Quality evaluation](docs/ARCHITECTURE.md#cross-cutting--two-tracks) — scoring against labelled reference data; gates every "is it better?" claim | planned |
 
@@ -76,7 +79,7 @@ key; traced runs upload inputs and outputs, so use synthetic data only.
 
 ## Current state
 
-Works today, covered by 139 tests:
+Works today, covered by 180 Python tests and 18 web tests:
 
 * Requirement extraction from list-formatted postings, wording preserved
 * Model-backed extraction and matching behind one provider seam, never trusted raw
@@ -88,6 +91,8 @@ Works today, covered by 139 tests:
 * Round context parsed once, threaded into preparation only
 * A behavioral regression suite — trajectory, state, outcome — run by CI, red fails the build
 * Evidence from a YAML corpus or markdown resume; `match`, `prep`, `agent`, `eval` commands
+* A web session layer over the same loop — demo and bring-your-own-key runs, one socket, one pure reducer
+* Deployed as one container, scale-to-zero; the landing page absorbs the wake, every response carries security headers
 
 Known limitations, in order of how much they cost:
 
