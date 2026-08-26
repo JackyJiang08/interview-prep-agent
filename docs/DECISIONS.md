@@ -264,6 +264,33 @@ constructor, so holding a key costs nothing until a request is made. The
 other two could adopt that, and nothing above the seam would notice either
 way.
 
+### Three dialects, one contract
+
+A real run added the third data point on schemas, and it is the one that
+finally names the pattern. Each provider speaks a different dialect of
+"JSON shaped to this schema". Gemini took the Pydantic-derived schema as
+derived. Azure's strict mode required every object closed and every
+property listed as required, optional ones included — the walk in
+``providers/schema.py``. Anthropic's constrained decoding rejects value
+bounds outright: an array bounded to two through five items, a numeric
+range, a string length, a pattern, each a 400. The SDK ships a transform
+that strips those bounds into the description, and the provider now routes
+every schema through it; the shared walk, which the third provider had
+briefly borrowed, turned out to be the wrong adaptation for this dialect
+and serves Azure alone again.
+
+What makes the three equivalent in behavior is not any of these
+adaptations. It is the seam's post-parse validation: every provider's
+answer is parsed and then validated against the full Pydantic model by the
+caller, so a bound the request could not carry is still enforced on the
+response. The adaptation changes what the model is asked for; the contract
+— what is accepted — never moved. That is also why the fix is confined to
+the provider file and a conformance test that walks every requested model
+through it, and touches no stage, gate or prompt. The lesson for the seam:
+"a provider is one file" was always true; "a provider is one file and no
+schema surprises" was never promised, and each dialect has now taught its
+own.
+
 ## Tracing lives inside the seam, off by default
 
 Optional observability is wired at exactly one place: the provider

@@ -1,11 +1,13 @@
-"""The one schema adaptation two providers turned out to share.
+"""The schema adaptation the Azure dialect needs.
 
 Strict structured-output modes want every object to forbid extra properties
 and to list every property as required — including optional ones, which
 carry a null branch in their type. Pydantic emits the first and not the
 second. This walk closes the gap. It was written inside the Azure provider
-as provider-shaped work; the third provider needed it verbatim, which is
-what moved it here. See ``docs/DECISIONS.md``.
+as provider-shaped work and moved here when the third provider seemed to
+need it; that provider's dialect turned out to want a different adaptation
+— its vendor's own transform — so this one serves Azure alone for now, and
+stays shared in case a fourth dialect wants it. See ``docs/DECISIONS.md``.
 """
 
 from __future__ import annotations

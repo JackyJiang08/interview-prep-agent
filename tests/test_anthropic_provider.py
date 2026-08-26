@@ -13,7 +13,6 @@ from interview_prep_agent.config import Settings
 from interview_prep_agent.models import InterviewRound
 from interview_prep_agent.providers import PROVIDERS, ProviderError, build_model
 from interview_prep_agent.providers.anthropic import DEFAULT_MODEL, AnthropicModel
-from interview_prep_agent.providers.schema import close_schema
 from interview_prep_agent.server.app import create_app
 
 KEY = "an-key-TESTSECRET-2718"
@@ -90,13 +89,9 @@ def test_the_schema_is_requested_as_the_output_format(monkeypatch):
     output_format = request["output_config"]["format"]
     assert output_format["type"] == "json_schema"
     assert output_format["schema"]["additionalProperties"] is False
-    assert set(output_format["schema"]["required"]) == set(schema["properties"])
-
-
-def test_the_closed_schema_is_the_shared_adaptation():
-    schema = close_schema(InterviewRound.model_json_schema())
-    assert set(schema["required"]) == set(schema["properties"])
-    assert schema["additionalProperties"] is False
+    # This dialect does not require optional fields, unlike Azure's; the
+    # conformance test covers what it strips.
+    assert set(output_format["schema"].get("required", [])) == set(schema.get("required", []))
 
 
 def test_malformed_json_raises(monkeypatch):

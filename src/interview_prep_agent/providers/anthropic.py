@@ -9,6 +9,12 @@ stay usable without the dependency.
 The schema is sent through the SDK's structured-output mechanism, so the
 response arrives as JSON shaped to it. It is still only a request: what
 comes back is parsed here and validated by the caller, never trusted raw.
+
+This dialect rejects value bounds. Constrained decoding accepts no
+``minItems``/``maxItems`` beyond 0 and 1, no ``minimum``/``maximum``, no
+``minLength``/``maxLength``, no ``pattern`` — a request carrying one is a
+400. The SDK ships a transform for exactly this, and every schema goes
+through it here, in this file, and nowhere else.
 """
 
 from __future__ import annotations
@@ -18,7 +24,6 @@ import os
 from typing import Any
 
 from .base import ProviderError, StructuredModel
-from .schema import close_schema
 
 ENV_API_KEY = "ANTHROPIC_API_KEY"
 ENV_MODEL = "ANTHROPIC_MODEL"
@@ -84,7 +89,7 @@ class AnthropicModel(StructuredModel):
                 max_tokens=MAX_OUTPUT_TOKENS,
                 messages=[{"role": "user", "content": prompt}],
                 output_config={
-                    "format": {"type": "json_schema", "schema": close_schema(response_schema)}
+                    "format": {"type": "json_schema", "schema": _request_schema(response_schema)}
                 },
             )
         except Exception as error:  # noqa: BLE001 - vendor errors are not a taxonomy
@@ -102,3 +107,19 @@ class AnthropicModel(StructuredModel):
             return json.loads(text)
         except ValueError as error:
             raise ProviderError(f"Anthropic returned unparseable JSON: {error}") from error
+
+
+def _request_schema(response_schema: dict[str, Any]) -> dict[str, Any]:
+    """The schema as this API will accept it.
+
+    The SDK's own transform strips the bounds the API rejects — array
+    sizes beyond 0 and 1, numeric ranges, string lengths, patterns — into
+    the description, and closes every object. The behavior contract is
+    unchanged by this: the caller still validates the parsed response
+    against the full Pydantic model, so a stripped bound is enforced
+    there, after parsing, exactly as it is for every other provider. What
+    changes is only what the model is asked for, never what is accepted.
+    """
+    from anthropic import transform_schema
+
+    return transform_schema(response_schema)
