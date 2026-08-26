@@ -300,3 +300,35 @@ def test_package_event_carries_research_findings(client):
     research = seen["package"][0]["research"]
     assert [item["finding_id"] for item in research] == ["SRC-001"]
     assert research[0]["source_kind"] == "provided"
+
+
+# --- security headers ---------------------------------------------------------
+
+
+def test_every_response_carries_the_security_headers(client):
+    for path in ("/", "/api/health"):
+        response = client.get(path)
+        headers = response.headers
+        assert headers["Strict-Transport-Security"] == "max-age=31536000"
+        assert headers["X-Content-Type-Options"] == "nosniff"
+        assert headers["X-Frame-Options"] == "DENY"
+        assert headers["Referrer-Policy"] == "strict-origin-when-cross-origin"
+
+
+def test_the_content_security_policy_matches_what_the_page_loads(client):
+    for path in ("/", "/api/health"):
+        policy = client.get(path).headers["Content-Security-Policy"]
+        directives = dict(
+            (part.split(" ", 1) + [""])[:2]
+            for part in (item.strip() for item in policy.split(";"))
+            if part
+        )
+        assert directives["default-src"] == "'self'"
+        assert directives["script-src"] == "'self'"  # the built page has no inline script
+        assert directives["style-src"] == "'self'"
+        # The session socket shares the host but not the scheme, so the ws
+        # and wss origins are named next to 'self'.
+        connect = directives["connect-src"].split()
+        assert "'self'" in connect
+        assert "ws://testserver" in connect and "wss://testserver" in connect
+        assert directives["frame-ancestors"] == "'none'"

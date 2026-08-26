@@ -30,6 +30,32 @@ from .sessions import SessionRefused, SessionStore
 
 CLEANUP_INTERVAL_SECONDS = 60
 
+# Every HTTP response carries the same defensive headers. The policy is
+# written against what the built page actually loads — its script, stylesheet
+# and API calls all come from this origin — plus the session socket, which
+# shares the host but not the scheme, so 'self' alone cannot be trusted to
+# cover it in every browser.
+_SECURITY_HEADERS = {
+    "Strict-Transport-Security": "max-age=31536000",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+}
+
+
+def _content_security_policy(host: str) -> str:
+    socket_origins = f" ws://{host} wss://{host}" if host else ""
+    return (
+        "default-src 'self'; "
+        "script-src 'self'; "
+        "style-src 'self'; "
+        f"connect-src 'self'{socket_origins}; "
+        "img-src 'self' data:; "
+        "base-uri 'self'; "
+        "form-action 'self'; "
+        "frame-ancestors 'none'"
+    )
+
 
 class CreateSession(BaseModel):
     """The create-session request body."""
@@ -83,6 +109,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             allow_methods=["GET", "POST"],
             allow_headers=["*"],
         )
+
+    @app.middleware("http")
+    async def security_headers(request: Request, call_next):
+        response = await call_next(request)
+        response.headers.update(_SECURITY_HEADERS)
+        response.headers["Content-Security-Policy"] = _content_security_policy(
+            request.headers.get("host", "")
+        )
+        return response
 
     @app.exception_handler(SessionRefused)
     async def _refused(_request: Request, exc: SessionRefused) -> JSONResponse:
